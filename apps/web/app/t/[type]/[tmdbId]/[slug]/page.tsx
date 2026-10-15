@@ -45,7 +45,8 @@ export default async function TitlePage({ params }: { params: Promise<Params> })
   const { title, rating, scoring } = await load(p);
   const s = title.score;
   const scored = s.state === "FULL" || s.state === "EARLY";
-  const pending = s.state === "PENDING" || (scoring.queued && !scored);
+  // queued covers first scores and rescores (the old score stays visible while a rescore runs)
+  const pending = s.state === "PENDING" || scoring.queued;
 
   return (
     <article className="space-y-8">
@@ -69,7 +70,7 @@ export default async function TitlePage({ params }: { params: Promise<Params> })
         <TrustLine score={s} />
         <GenreLine score={s} />
         {s.state === "INSUFFICIENT" && <p className="text-sm text-dim">Fewer than 50 people who watched it have said what they thought, so we won&apos;t guess.</p>}
-        {pending && scoring.released && <ProgressStream titleId={title.id} initial={scoring.progress} />}
+        {pending && scoring.released && <ProgressStream titleId={title.id} initial={scoring.progress} updating={scored || s.countedN > 0} />}
         {!scoring.released && <p className="text-sm text-dim">Not out yet. We only count opinions from after release.</p>}
         {scoring.limited && <p className="text-sm text-dim">We&apos;re scoring a lot of new titles for you right now. This one will start shortly.</p>}
       </section>

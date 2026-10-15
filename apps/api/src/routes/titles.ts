@@ -5,7 +5,7 @@ import { trendingTitles } from "../agent/trending.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
 import { existingProfile, requireCaller, verifyStreamToken } from "../lib/auth.ts";
-import { lastProgress, onProgress } from "../pipeline/progress.ts";
+import { isActive, lastProgress, onProgress } from "../pipeline/progress.ts";
 import { quoteExcerpt } from "../pipeline/score.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
@@ -55,7 +55,7 @@ export async function titleRoutes(app: FastifyInstance) {
     return {
       title: await titleDto(t),
       rating: rating ? { titleId: t.id, value: rating.value, seen: rating.seen, wantToWatch: rating.wantToWatch } : null,
-      scoring: { queued, limited, progress: lastProgress(t.id) ?? null, released: !(t.releaseDate && t.releaseDate > new Date()) },
+      scoring: { queued: queued || isActive(t.id), limited, progress: lastProgress(t.id) ?? null, released: !(t.releaseDate && t.releaseDate > new Date()) },
     };
   });
 
@@ -69,8 +69,10 @@ export async function titleRoutes(app: FastifyInstance) {
     const sse = startSse(reply);
     const last = lastProgress(id);
     if (last) sse.send("progress", last);
-    if (t.scoreState !== "PENDING" && (!last || last.stage === "ready")) {
-      sse.send("progress", { stage: "ready", message: "Score ready" });
+    // Done only if nothing is queued or running. A rescore of an already-scored title keeps its
+    // old state (e.g. INSUFFICIENT) while it runs, so the state alone can't tell us.
+    if (!isActive(id) && t.scoreState !== "PENDING") {
+      if (!last || last.stage !== "ready") sse.send("progress", { stage: "ready", message: "Score ready" });
       return sse.end();
     }
     const off = onProgress(id, (e) => {

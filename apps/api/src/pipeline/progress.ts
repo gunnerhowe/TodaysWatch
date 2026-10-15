@@ -5,11 +5,28 @@ import type { ProgressEvent } from "@tp/shared";
 const bus = new EventEmitter();
 bus.setMaxListeners(500);
 const last = new Map<string, ProgressEvent>();
+const lastAt = new Map<string, number>();
+const QUEUED_EXPIRES_MS = 15 * 60_000;
 
 export function emitProgress(titleId: string, e: ProgressEvent) {
   last.set(titleId, e);
+  lastAt.set(titleId, Date.now());
   bus.emit(titleId, e);
   if (e.stage === "ready" || e.stage === "error") setTimeout(() => last.delete(titleId), 10 * 60_000).unref();
+}
+
+/** True while a scoring run for this title is queued or running (in this process). */
+export function isActive(titleId: string): boolean {
+  const s = last.get(titleId)?.stage;
+  if (!s || s === "ready" || s === "error") return false;
+  // a queued marker whose job never started (e.g. deduplicated) must not hang the page
+  return !(s === "queued" && Date.now() - (lastAt.get(titleId) ?? 0) > QUEUED_EXPIRES_MS);
+}
+
+/** Called when a run is enqueued, so the page streams progress instead of reporting the old score as ready. */
+export function markQueued(titleId: string) {
+  if (isActive(titleId)) return; // already queued or running; keep its live message
+  emitProgress(titleId, { stage: "queued", message: "Waiting for a scoring slot…" });
 }
 
 export function lastProgress(titleId: string): ProgressEvent | undefined {

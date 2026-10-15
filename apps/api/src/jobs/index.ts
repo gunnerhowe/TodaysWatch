@@ -3,11 +3,14 @@ import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { purgeExpiredCache } from "../lib/cache.ts";
 import { recomputeBaselines } from "../pipeline/baselines.ts";
+import { markQueued } from "../pipeline/progress.ts";
 import { scoreTitle } from "../pipeline/score.ts";
 import { prescoreBatch } from "./prescore.ts";
 
 /** pg-boss keeps its own tables in Postgres, so there's no Redis. */
 let boss: PgBoss | null = null;
+
+const SCORE_WORKERS = 3;
 
 export const Q = {
   score: "score-title",
@@ -25,11 +28,13 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
   await boss.start();
   for (const q of Object.values(Q)) await boss.createQueue(q);
 
-  // Live scoring: a few at a time so user requests don't starve each other.
-  await boss.work<{ titleId: string; live: boolean }>(Q.score, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
-    if (!job) return;
-    await scoreTitle(job.data.titleId, { live: job.data.live });
-  });
+  // Live scoring: three workers, so one slow title doesn't make everyone else wait in line.
+  for (let w = 0; w < SCORE_WORKERS; w++) {
+    await boss.work<{ titleId: string; live: boolean }>(Q.score, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
+      if (!job) return;
+      await scoreTitle(job.data.titleId, { live: job.data.live });
+    });
+  }
   await boss.work(Q.prescore, { batchSize: 1 }, async () => {
     const r = await prescoreBatch(log);
     log(`prescore: ${JSON.stringify(r)}`);
@@ -58,12 +63,13 @@ export async function nightly(log: (m: string) => void) {
 
 /** Queue a title for scoring (deduplicated per title). Returns false if jobs are off. */
 export async function enqueueScore(titleId: string, live: boolean): Promise<boolean> {
+  markQueued(titleId);
   if (!boss) {
     // No queue (e.g. local dev without jobs): run inline in the background.
     void scoreTitle(titleId, { live }).catch(() => {});
     return true;
   }
-  await boss.send(Q.score, { titleId, live }, { singletonKey: titleId, singletonSeconds: 600, retryLimit: 1, expireInSeconds: 900 });
+  await boss.send(Q.score, { titleId, live }, { singletonKey: titleId, singletonSeconds: 600, retryLimit: 1, expireInSeconds: 1800 });
   return true;
 }
 

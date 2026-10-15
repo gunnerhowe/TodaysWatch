@@ -32,7 +32,8 @@ Stored text is an excerpt of at most 280 characters with its source link. YouTub
 
 - **Model:** NVIDIA Nemotron 3 Nano on Nebius Token Factory (`LLM_CLASSIFIER_MODEL`), reasoning mode off.
 - 40 items per call, temperature 0, JSON validated with zod. Invalid output is retried once; a batch that fails twice goes to the fallback.
-- The prompt has 12 labelled examples (sarcasm, mixed verdicts, hype, off-topic, a prompt-injection attempt) and treats every comment as untrusted data.
+- The prompt has 16 labelled examples (sarcasm, mixed verdicts, hype, off-topic, a prompt-injection attempt, and complaints about one part of a title from people who love it) and treats every comment as untrusted data.
+- The verdict is on the **whole title**: a complaint about one season, ending or character exit from someone who clearly loves the show is "liked" (or "mixed"), not "disliked". Added in prompt `cls-v2` after a live review of *The Office* found fans' complaints about the post-Michael seasons labelled as dislikes.
 - Per item: `about_title`, `firsthand` (official post-release discussion threads and logged reviews count as firsthand unless the text says otherwise), `stance` (`liked`, `mixed`, `disliked`, `none`), `confidence`.
 - **Fallback:** Cardiff RoBERTa sentiment (`Xenova/twitter-roberta-base-sentiment-latest`, ONNX, in-process) when the spend cap is hit, Nebius is down, or a batch fails validation twice. Positive → liked, negative → disliked, neutral → mixed only at ≥ 0.7, else none. Scores that include fallback labels show "basic classifier".
 - **Versioning:** each label records `model@prompt-version`. Changing either makes old labels non-current, so they're reclassified before counting; old and new numbers never mix. Each score snapshot records its version.

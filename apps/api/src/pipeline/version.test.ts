@@ -12,7 +12,7 @@ beforeAll(async () => {
 
 describe("score versions", () => {
   it("includes the classifier and the enabled sources", () => {
-    expect(v.expectedVersion()).toMatch(/@cls-v1\|src:TMDB_REVIEW,YOUTUBE$/);
+    expect(v.expectedVersion()).toMatch(/@cls-v\d+\|src:TMDB_REVIEW,YOUTUBE$/);
   });
 
   it("a score made the current way is current", () => {

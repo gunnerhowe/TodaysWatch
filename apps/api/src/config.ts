@@ -74,7 +74,7 @@ export function sourcesEnabled() {
   };
 }
 
-export const CLASSIFIER_PROMPT_VERSION = "cls-v1";
+export const CLASSIFIER_PROMPT_VERSION = "cls-v2";
 export const VERSION = "1.0.0";
 
 export function scoreVersion(classifier: string): string {

@@ -17,31 +17,47 @@ export function ProgressStream({ titleId, initial, updating = false }: { titleId
   useEffect(() => {
     let es: EventSource | null = null;
     let cancelled = false;
-    (async () => {
+    let done = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+
+    // Connections drop (phones sleep, networks switch, servers restart). Keep reconnecting with a
+    // fresh token until the run reports ready or error; a reconnect after it finished gets
+    // "ready" immediately, which refreshes the page.
+    const connect = async () => {
+      if (cancelled || done) return;
       try {
         const { token, url } = await streamToken();
         if (cancelled) return;
         es = new EventSource(`${url}/v1/titles/${titleId}/progress?token=${encodeURIComponent(token)}`);
         es.addEventListener("progress", (ev) => {
+          failures = 0;
+          setFailed(false);
           const e = JSON.parse((ev as MessageEvent).data) as ProgressEvent;
           setP(e);
-          if (e.stage === "ready") {
+          if (e.stage === "ready" || e.stage === "error") {
+            done = true;
             es?.close();
-            router.refresh();
+            if (e.stage === "ready") router.refresh();
           }
-          if (e.stage === "error") es?.close();
         });
         es.onerror = () => {
           es?.close();
-          // fall back to polling the page every 10s
-          if (!cancelled) setTimeout(() => router.refresh(), 10_000);
+          if (cancelled || done) return;
+          failures++;
+          if (failures >= 3) setFailed(true);
+          retry = setTimeout(connect, Math.min(30_000, 2_000 * failures));
         };
       } catch {
+        failures++;
         setFailed(true);
+        if (!cancelled) retry = setTimeout(connect, Math.min(30_000, 2_000 * failures));
       }
-    })();
+    };
+    void connect();
     return () => {
       cancelled = true;
+      if (retry) clearTimeout(retry);
       es?.close();
     };
   }, [titleId, router]);
@@ -54,7 +70,7 @@ export function ProgressStream({ titleId, initial, updating = false }: { titleId
         <span className="pulse-dot inline-block h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden />
         {p?.stage === "error" ? "Scoring hit a problem. We'll try again later." : msg}
       </p>
-      <p className="mt-1 text-xs text-faint">{failed ? "Live updates are unavailable; this page will refresh." : updating ? "The score above stays until the update is done, usually a few minutes. This page refreshes itself." : "Usually a few minutes. You can leave and come back; the score will be waiting."}</p>
+      <p className="mt-1 text-xs text-faint">{failed ? "Connection dropped. Reconnecting…" : updating ? "The score above stays until the update is done, usually a few minutes. This page refreshes itself." : "Usually a few minutes. You can leave and come back; the score will be waiting."}</p>
     </div>
   );
 }

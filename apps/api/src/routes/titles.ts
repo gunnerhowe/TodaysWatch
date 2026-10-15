@@ -83,11 +83,12 @@ export async function titleRoutes(app: FastifyInstance) {
       }
     });
     sse.onClose(off);
-    // Safety net: stop after 5 minutes; the page re-fetches the title.
+    // Safety net, longer than a scoring job's 30-minute timeout. The page reconnects if any
+    // connection drops, and a reconnect after the run finished gets "ready" straight away.
     setTimeout(() => {
       off();
       sse.end();
-    }, 5 * 60_000).unref();
+    }, 35 * 60_000).unref();
   });
 
   app.get("/v1/titles/:id/quotes", { preHandler: requireCaller }, async (req) => {

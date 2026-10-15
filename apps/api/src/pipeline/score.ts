@@ -9,7 +9,7 @@ import * as trakt from "../sources/trakt.ts";
 import { SourceDisabledError, type RawItem, type TitleRef } from "../sources/types.ts";
 import * as youtube from "../sources/youtube.ts";
 import { typeToKind } from "../titles.ts";
-import { loadBaselines } from "./baselines.ts";
+import { loadBaselines, scheduleBaselineRefresh } from "./baselines.ts";
 import { classifyAll, type ToClassify } from "./classify.ts";
 import { blueskyRelevant, cleanItems, interleaveBySource, mentionsTheVideo } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
@@ -237,6 +237,8 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
       data: { titleId, liked: s.liked, mixed: s.mixed, disliked: s.disliked, counted: s.counted, collected: mentions.length, version },
     }),
   ]);
+  // a new full score can push a genre over 15 titles; refresh baselines soon, not tomorrow night
+  if (s.state === "FULL") scheduleBaselineRefresh();
   return s;
 }
 

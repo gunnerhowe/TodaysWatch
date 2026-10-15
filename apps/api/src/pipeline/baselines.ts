@@ -38,3 +38,26 @@ export async function recomputeBaselines(): Promise<{ genres: number; titles: nu
   }
   return { genres: byGenre.size, titles: full.length };
 }
+
+let pending: ReturnType<typeof setTimeout> | null = null;
+let lastRun = 0;
+const MIN_GAP_MS = 10 * 60_000;
+
+/**
+ * Rebuild baselines soon after a new full score, at most once every 10 minutes, so a genre's
+ * "Beats X% of ..." line appears the same day it reaches 15 titles instead of the next night.
+ */
+export function scheduleBaselineRefresh(): void {
+  if (pending) return;
+  const wait = Math.max(5_000, lastRun + MIN_GAP_MS - Date.now());
+  pending = setTimeout(async () => {
+    pending = null;
+    lastRun = Date.now();
+    try {
+      await recomputeBaselines();
+    } catch (e) {
+      console.warn("[baselines] refresh failed:", e instanceof Error ? e.message : e);
+    }
+  }, wait);
+  pending.unref?.();
+}

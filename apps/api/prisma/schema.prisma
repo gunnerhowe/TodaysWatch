@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TitleType {
+  MOVIE
+  TV
+}
+
+enum Source {
+  YOUTUBE
+  REDDIT
+  TRAKT
+  BLUESKY
+  TMDB_REVIEW
+}
+
+enum Stance {
+  LIKED
+  MIXED
+  DISLIKED
+  NONE
+}
+
+enum ScoreState {
+  NONE
+  PENDING
+  EARLY
+  FULL
+  INSUFFICIENT
+}
+
+enum RatingValue {
+  UP
+  DOWN
+}
+
+model Title {
+  id              String          @id @default(cuid())
+  tmdbId          Int
+  type            TitleType
+  name            String
+  year            Int?
+  releaseDate     DateTime?
+  genres          String[] // TMDB order; first = shown on page
+  runtimeMin      Int?
+  posterPath      String?
+  overview        String?
+  popularity      Float?
+  tmdbVoteAvg     Float?
+  tmdbVoteCount   Int?
+  qlooEntityId    String?
+  qlooMatchConf   Float?
+  youtubeVideoIds String[]        @default([]) // cached so refreshes skip search.list
+  // current score, copied here for one-query reads
+  scoreState      ScoreState      @default(NONE)
+  likedPct        Int?
+  mixedPct        Int?
+  dislikedPct     Int?
+  countedN        Int             @default(0)
+  collectedN      Int             @default(0)
+  marginPts       Int?
+  wilsonLow       Float?
+  genrePctl       Json? // { "Horror": 82, "Thriller": 64 }
+  genreAdjusted   Float? // 0..1, used by the pick score
+  sourceCounts    Json? // { "YOUTUBE": 254, "REDDIT": 280 }
+  summary         String?
+  scoreVersion    String? // classifier model + prompt version
+  basicClassifier Boolean         @default(false)
+  scoredAt        DateTime?
+  nextRefreshAt   DateTime?
+  detailsAt       DateTime?
+  mentions        Mention[]
+  snapshots       ScoreSnapshot[]
+  ratings         Rating[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([tmdbId, type])
+  @@index([scoreState, nextRefreshAt])
+  @@index([qlooEntityId])
+}
+
+model Mention {
+  id         String    @id @default(cuid())
+  titleId    String
+  title      Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  source     Source
+  externalId String
+  url        String
+  excerpt    String // 280 chars max
+  textHash   String
+  authorHash String // sha256(salt + source + handle)
+  postedAt   DateTime?
+  likes      Int?
+  aboutTitle Boolean?
+  firsthand  Boolean?
+  stance     Stance?
+  confidence Float?
+  classifier String?
+  isQuote    Boolean   @default(false)
+  expiresAt  DateTime? // YouTube 30-day rule
+  createdAt  DateTime  @default(now())
+
+  @@unique([source, externalId])
+  @@unique([titleId, authorHash]) // one opinion per author per title
+  @@index([titleId, stance])
+  @@index([expiresAt])
+}
+
+model ScoreSnapshot {
+  id         String   @id @default(cuid())
+  titleId    String
+  title      Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  liked      Int
+  mixed      Int
+  disliked   Int
+  counted    Int
+  collected  Int
+  version    String
+  computedAt DateTime @default(now())
+
+  @@index([titleId, computedAt])
+}
+
+model GenreBaseline {
+  genre       String   @id
+  n           Int
+  medianLiked Float
+  sortedLiked Int[] // every full-score title's likedPct, ascending
+  updatedAt   DateTime @updatedAt
+}
+
+model Profile {
+  id        String        @id @default(cuid())
+  anonToken String        @unique // sha256 of the guest cookie
+  userId    String?       @unique // Auth.js user once signed in
+  settings  Json          @default("{\"includeSeen\":false}")
+  ratings   Rating[]
+  pairsAsA  Pair[]        @relation("PairA")
+  pairsAsB  Pair[]        @relation("PairB")
+  sessions  ChatSession[]
+  mcpLinks  McpLink[]
+  createdAt DateTime      @default(now())
+}
+
+model Rating {
+  profileId   String
+  titleId     String
+  profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       Title        @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  value       RatingValue?
+  seen        Boolean      @default(false)
+  wantToWatch Boolean      @default(false)
+  updatedAt   DateTime     @updatedAt
+
+  @@id([profileId, titleId])
+}
+
+model Pair {
+  id         String   @id @default(cuid())
+  inviteCode String   @unique
+  aId        String
+  bId        String?
+  a          Profile  @relation("PairA", fields: [aId], references: [id], onDelete: Cascade)
+  b          Profile? @relation("PairB", fields: [bId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  profileId String
+  profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  channel   String        @default("web") // web | alexa
+  messages  ChatMessage[]
+  runs      AgentRun[]
+  createdAt DateTime      @default(now())
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   Json
+  createdAt DateTime    @default(now())
+}
+
+model AgentRun {
+  id            String      @id @default(cuid())
+  sessionId     String
+  session       ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  model         String
+  toolCalls     Json // ordered list, for the provenance drawer
+  picks         Json
+  rejectedFinal Int         @default(0)
+  inputTokens   Int         @default(0)
+  outputTokens  Int         @default(0)
+  costUsd       Float       @default(0)
+  latencyMs     Int?
+  qlooCalls     QlooCall[]
+  createdAt     DateTime    @default(now())
+}
+
+model QlooCall {
+  id           String    @id @default(cuid())
+  agentRunId   String?
+  agentRun     AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  tool         String
+  argsRedacted Json
+  status       String // ok | empty | needs_input | partial | degraded | error
+  resultCount  Int
+  latencyMs    Int
+  cached       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+}
+
+model UsageLedger {
+  day      DateTime // UTC date
+  provider String // youtube_units | llm_usd | llm_prescore_usd | qloo_calls
+  used     Float
+
+  @@id([day, provider])
+}
+
+model McpLink {
+  id           String    @id @default(cuid())
+  codeHash     String    @unique // sha256 of the 6-digit code
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime // code valid 10 minutes, single use
+  redeemedAt   DateTime?
+  mcpSessionId String? // Mcp-Session-Id bound on redeem
+  boundUntil   DateTime? // binding lasts 12 hours
+  createdAt    DateTime  @default(now())
+}
+
+/// Small key/value cache for identical external calls (TMDB, Qloo 24h).
+model CacheEntry {
+  key       String   @id
+  value     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// ---------- Auth.js (optional sign-in; used by apps/web) ----------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}

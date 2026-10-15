@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+/*
+ * Late-night cinema: near-black house lights, warm marquee accents, posters doing the work.
+ * Score colors: Liked teal, Mixed amber, Disliked coral — always paired with labels and patterns.
+ */
+@theme {
+  --font-display: var(--font-barlow), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0b0a09;
+  --color-ink-2: #14120f;
+  --color-ink-3: #1d1a16;
+  --color-line: #2c2822;
+  --color-paper: #f3ede2;
+  --color-paper-dim: #b9b0a1;
+  --color-paper-faint: #8a8174;
+  --color-marquee: #f2b544;
+  --color-marquee-deep: #c98a1b;
+  --color-bulb: #ffe7b0;
+
+  --color-liked: #2bb3a3;
+  --color-mixed: #e3a43a;
+  --color-disliked: #ec6a55;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: var(--color-ink);
+  --bg-2: var(--color-ink-2);
+  --bg-3: var(--color-ink-3);
+  --fg: var(--color-paper);
+  --fg-dim: var(--color-paper-dim);
+  --fg-faint: var(--color-paper-faint);
+  --line: var(--color-line);
+  --accent: var(--color-marquee);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #faf6ef;
+  --bg-2: #f1ebe0;
+  --bg-3: #e7dfd1;
+  --fg: #1a1714;
+  --fg-dim: #4f4840;
+  --fg-faint: #6d655b;
+  --line: #d8cfbf;
+  --accent: #a86b05;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #faf6ef;
+    --bg-2: #f1ebe0;
+    --bg-3: #e7dfd1;
+    --fg: #1a1714;
+    --fg-dim: #4f4840;
+    --fg-faint: #6d655b;
+    --line: #d8cfbf;
+    --accent: #a86b05;
+  }
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.surface {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+.surface-3 {
+  background: var(--bg-3);
+}
+.text-dim {
+  color: var(--fg-dim);
+}
+.text-faint {
+  color: var(--fg-faint);
+}
+.text-accent {
+  color: var(--accent);
+}
+.border-line {
+  border-color: var(--line);
+}
+
+/* Marquee glow behind the brand, subtle. */
+.marquee-glow {
+  background: radial-gradient(60% 120% at 50% 0%, rgba(242, 181, 68, 0.14), transparent 70%);
+}
+
+/* Score bar patterns so segments read in grayscale and for colorblind users. */
+.pat-liked {
+  background-color: var(--color-liked);
+}
+.pat-mixed {
+  background-color: var(--color-mixed);
+  background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.22) 0 3px, transparent 3px 7px);
+}
+.pat-disliked {
+  background-color: var(--color-disliked);
+  background-image: radial-gradient(rgba(0, 0, 0, 0.28) 1.2px, transparent 1.4px);
+  background-size: 6px 6px;
+}
+
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.bar-fill {
+  transform-origin: left;
+  animation: fill 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-2) 0%, var(--bg-3) 50%, var(--bg-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill,
+  .skeleton,
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

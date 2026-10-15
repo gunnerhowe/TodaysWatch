@@ -1,0 +1,22 @@
+[
+  { "kind": "movie", "tmdbId": 493922, "name": "Hereditary", "value": "UP", "seen": true },
+  { "kind": "movie", "tmdbId": 310131, "name": "The Witch", "value": "UP", "seen": true },
+  { "kind": "movie", "tmdbId": 419430, "name": "Get Out", "value": "UP", "seen": true },
+  { "kind": "movie", "tmdbId": 546554, "name": "Knives Out", "value": "UP", "seen": true },
+  { "kind": "movie", "tmdbId": 329865, "name": "Arrival", "value": "UP", "seen": true },
+  { "kind": "tv", "tmdbId": 95396, "name": "Severance", "value": "UP", "seen": true },
+  { "kind": "tv", "tmdbId": 136315, "name": "The Bear", "value": "UP", "seen": true },
+  { "kind": "movie", "tmdbId": 346698, "name": "Barbie", "value": "DOWN", "seen": true },
+  { "kind": "movie", "tmdbId": 76341, "name": "Mad Max: Fury Road", "value": "DOWN", "seen": true },
+  { "kind": "tv", "tmdbId": 97546, "name": "Ted Lasso", "value": "DOWN", "seen": true },
+  { "kind": "movie", "tmdbId": 530385, "name": "Midsommar", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 545611, "name": "Everything Everywhere All at Once", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 666277, "name": "Past Lives", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 496243, "name": "Parasite", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 693134, "name": "Dune: Part Two", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 346648, "name": "Paddington 2", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "tv", "tmdbId": 67070, "name": "Fleabag", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "tv", "tmdbId": 100088, "name": "The Last of Us", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "tv", "tmdbId": 76331, "name": "Succession", "value": null, "seen": false, "wantToWatch": true },
+  { "kind": "movie", "tmdbId": 872585, "name": "Oppenheimer", "value": null, "seen": false, "wantToWatch": true }
+]

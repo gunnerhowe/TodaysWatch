@@ -1,0 +1,14 @@
+# Local Postgres for development. Production uses Neon (or Railway Postgres).
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tp
+      POSTGRES_PASSWORD: tp
+      POSTGRES_DB: tonights_pick
+    ports:
+      - "5432:5432"
+    volumes:
+      - tp-pg:/var/lib/postgresql/data
+volumes:
+  tp-pg:

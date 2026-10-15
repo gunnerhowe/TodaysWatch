@@ -1,0 +1,99 @@
+# Methodology
+
+How the Real People Score is computed, and how the agent picks. The code is the source of truth: the scoring math lives in [`packages/scoring`](../packages/scoring/src/index.ts) and is unit-tested; the pipeline is in [`apps/api/src/pipeline`](../apps/api/src/pipeline).
+
+## 1. Sources
+
+Every source is reached through its official API, with our own keys, within its terms. No scraping, no automated personal accounts, no unofficial endpoints (including Reddit's `.json` pages), no resellers.
+
+| Source | What we read | Limit per title | Code |
+|---|---|---|---|
+| YouTube Data API v3 | Top-level comments on up to 3 post-release review/reaction videos, by relevance | 300 per video | [`youtube.ts`](../apps/api/src/sources/youtube.ts) |
+| Bluesky (AT Protocol) | Public English posts mentioning the title, posted after release; read-only search with an app password from our own account | 400 | [`bluesky.ts`](../apps/api/src/sources/bluesky.ts) |
+| TMDB reviews | Reviews from people who logged watching it | 200 | [`tmdb.ts`](../apps/api/src/sources/tmdb.ts) |
+| Trakt (if `TRAKT_CLIENT_ID` set) | Comments, most-liked first | 100 | [`trakt.ts`](../apps/api/src/sources/trakt.ts) |
+| Reddit (only if approved) | Official post-release discussion threads in r/movies or r/television, via OAuth | 600 | [`reddit.ts`](../apps/api/src/sources/reddit.ts) |
+
+A source with no credentials is switched off and `/health` and the UI list only live sources.
+
+## 2. Cleaning ([`clean.ts`](../apps/api/src/pipeline/clean.ts))
+
+In order:
+
+1. Drop anything posted before the release or premiere date (removes trailer hype).
+2. Drop link-only posts, items under 4 words, likely bots, and non-English text (Latin-script check, English function words, and a foreign-function-word check).
+3. Hash the author handle (`sha256(salt:source:handle)`) and keep **one opinion per author per title**, the longest. Raw handles are never stored.
+4. Remove exact duplicates (normalized-text hash) and near-duplicates (3-word shingle Jaccard ≥ 0.8), keeping the longer text.
+5. Cap at 1,000 items, sampled proportionally across sources (largest-remainder quotas), most-liked first within a source.
+
+Stored text is an excerpt of at most 280 characters with its source link. YouTube excerpts are blanked after 30 days (developer policy); the labels and counts stay.
+
+## 3. Classification ([`classify.ts`](../apps/api/src/pipeline/classify.ts))
+
+- **Model:** NVIDIA Nemotron 3 Nano on Nebius Token Factory (`LLM_CLASSIFIER_MODEL`), reasoning mode off.
+- 40 items per call, temperature 0, JSON validated with zod. Invalid output is retried once; a batch that fails twice goes to the fallback.
+- The prompt has 12 labelled examples (sarcasm, mixed verdicts, hype, off-topic, a prompt-injection attempt) and treats every comment as untrusted data.
+- Per item: `about_title`, `firsthand` (official post-release discussion threads and logged reviews count as firsthand unless the text says otherwise), `stance` (`liked`, `mixed`, `disliked`, `none`), `confidence`.
+- **Fallback:** Cardiff RoBERTa sentiment (`Xenova/twitter-roberta-base-sentiment-latest`, ONNX, in-process) when the spend cap is hit, Nebius is down, or a batch fails validation twice. Positive → liked, negative → disliked, neutral → mixed only at ≥ 0.7, else none. Scores that include fallback labels show "basic classifier".
+- **Versioning:** each label records `model@prompt-version`. Changing either makes old labels non-current, so they're reclassified before counting; old and new numbers never mix. Each score snapshot records its version.
+
+## 4. Counting and the score
+
+An opinion **counts** if `about_title` and `firsthand` are true, `stance` isn't `none`, and `confidence ≥ 0.6`.
+
+- **Liked / Mixed / Disliked %** are shares of counted opinions, rounded with the largest-remainder method so they always sum to 100.
+- **Headline = Liked %.**
+- **Sample states:** 150+ counted → full score; 50–149 → "Early read"; under 50 → "Not enough talk yet", no percentage.
+- **Margin:** half-width of the 95% Wilson interval, shown as "± n points".
+
+## 5. Ranking: Wilson lower bound
+
+$$\text{wilson\_low} = \frac{p + \frac{z^2}{2n} - z\sqrt{\frac{p(1-p)}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \quad z = 1.96$$
+
+so 90% from 60 opinions ranks below 85% from 900 (unit-tested).
+
+## 6. Genre baselines
+
+- Baseline for a TMDB genre = Liked % of every **full-score** title listing it. Recomputed nightly.
+- **Display:** "Beats X% of horror we've scored (N titles)" uses the title's Liked % against its **first-listed** TMDB genre, shown only if that genre has 15+ titles. Percentile = (titles lower + half of exact ties) ÷ N × 100.
+- **Ranking (`genre_adjusted`):** the title's Wilson lower bound (× 100) placed against each of its genres' baselines, averaged across genres with 15+ titles. Using the lower bound here penalizes thin samples.
+- The How-it-works page charts the median Liked % per genre **from our database**. We make no claim (e.g. "horror audiences are harsher") that the chart doesn't show.
+
+## 7. The pick score
+
+$$\text{pick} = w_q \cdot \text{taste} + w_r \cdot \text{genre\_adjusted}$$
+
+- `taste` (0–1): Qloo's fit for this person, from rank position in `qloo_rank` (or `qloo_recommend` order), normalized.
+- `genre_adjusted` (0–1): as above; falls back to the Wilson lower bound if no genre has a baseline yet.
+- `w_q = w_r = 0.5` by default (`PICK_WEIGHT_TASTE`, `PICK_WEIGHT_RECEPTION`).
+- Hard filters run first: at least 50 counted opinions, not seen or rated (unless the user opts in), and every user constraint.
+
+## 8. The agent and the server check
+
+The agent ([`loop.ts`](../apps/api/src/agent/loop.ts)) is Nemotron 3 Super with tool calling, at most 8 tool calls per turn. Its tools are our own wrappers ([`tools.ts`](../apps/api/src/agent/tools.ts)):
+
+| Tool | Backed by |
+|---|---|
+| `get_user_context` | our DB |
+| `find_taste_tags` | `qloo_find_tags` |
+| `recommend_titles` | `qloo_recommend` (+ `qloo api search` for title matching) |
+| `rank_for_user` | `qloo_rank` |
+| `get_scores` | our DB (queues scoring for unscored titles) |
+| `apply_constraints` | TMDB details and watch providers |
+| `explain_fit` | `qloo_entity_tags` |
+| `trending` | `qloo_trends` |
+| `pair_pick` | `qloo_recommend`, `qloo_rank` (once per person), `qloo_compare_audiences` |
+| `final_answer` | server validation |
+
+**`final_answer` is checked in code** ([`validate.ts`](../apps/api/src/agent/validate.ts)): every pick and backup ID must have appeared in a tool result during this turn; no seen, rated or disliked titles unless the user opted in; picks need 50+ counted opinions (unscored titles may only be backups). A rejected answer gets the reason and one retry. If the model still fails, is over its cap, or is unavailable, the server runs the same default plan itself with the same tools, and the answer says so. Either way, an invented or already-seen pick can't reach the user.
+
+**Two-Person Pick:** candidates come from both people's likes; each candidate is ranked separately for each person with `qloo_rank`; we keep the titles with the best **worse** fit (maximize the minimum), so the pick is the one the less-excited person still likes. Titles either person has seen are removed.
+
+## 9. Limits
+
+- People who comment online aren't a random sample of viewers.
+- Review-bombing: one-opinion-per-author and the post-release filter help, but don't prevent it.
+- English only.
+- Sources we can't access (X, TikTok, Facebook, Instagram, Letterboxd, IMDb, Rotten Tomatoes) mean some titles have little talk.
+- Qloo affinities describe groups, not individuals.
+- The classifier's measured agreement with human labels is reported in [`eval/README.md`](eval/README.md), whatever it turns out to be.

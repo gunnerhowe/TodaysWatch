@@ -1,0 +1,16 @@
+title = "Tonight's Pick gitleaks config"
+
+[extend]
+useDefault = true
+
+# Generic catch for the project's own secret names assigned a non-empty value anywhere in the repo.
+[[rules]]
+id = "tonights-pick-env-secret"
+description = "Project secret assigned a value"
+regex = '''(?i)\b(QLOO_API_KEY|NEBIUS_API_KEY|TMDB_API_KEY|YOUTUBE_API_KEY|BLUESKY_APP_PASSWORD|REDDIT_CLIENT_SECRET|MCP_BEARER_TOKEN|API_SHARED_SECRET|STREAM_TOKEN_SECRET|ADMIN_SECRET|AUTHOR_HASH_SALT|AUTH_SECRET|ANTHROPIC_API_KEY)\s*=\s*["']?([A-Za-z0-9_\-\.]{12,})'''
+secretGroup = 2
+
+[allowlist]
+description = "Placeholders and local-only dev values"
+regexes = ['''dev-salt-change-me''', '''dev-stream-secret''', '''local-test-bearer''', '''local-stream''', '''local-secret''']
+paths = ['''pnpm-lock\.yaml''', '''docs/qloo-tools\.json''']

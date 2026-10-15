@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+.env
+.env.local
+.env.*.local
+*.log
+coverage/
+.turbo/
+.vercel/
+apps/api/models/
+next-env.d.ts
+*.tsbuildinfo
+
+# eval working files with comment text or blind keys
+docs/eval/to-label.csv
+docs/eval/blind-key.txt

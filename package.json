@@ -1,0 +1,21 @@
+{
+  "name": "tonights-pick",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@9.3.0",
+  "engines": { "node": ">=22.19" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @tp/api --filter @tp/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @tp/api db:generate",
+    "db:migrate": "pnpm --filter @tp/api db:migrate",
+    "qloo:smoke": "pnpm --filter @tp/api qloo:smoke",
+    "qloo:schemas": "pnpm --filter @tp/api qloo:schemas",
+    "llm:smoke": "pnpm --filter @tp/api llm:smoke",
+    "llm:models": "pnpm --filter @tp/api llm:models",
+    "eval": "pnpm --filter @tp/api eval"
+  }
+}

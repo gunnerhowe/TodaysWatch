@@ -1,0 +1,22 @@
+[
+  { "kind": "movie", "tmdbId": 693134, "name": "Dune: Part Two" },
+  { "kind": "movie", "tmdbId": 438631, "name": "Dune" },
+  { "kind": "movie", "tmdbId": 493922, "name": "Hereditary" },
+  { "kind": "movie", "tmdbId": 310131, "name": "The Witch" },
+  { "kind": "movie", "tmdbId": 530385, "name": "Midsommar" },
+  { "kind": "movie", "tmdbId": 419430, "name": "Get Out" },
+  { "kind": "movie", "tmdbId": 546554, "name": "Knives Out" },
+  { "kind": "movie", "tmdbId": 346648, "name": "Paddington 2" },
+  { "kind": "movie", "tmdbId": 545611, "name": "Everything Everywhere All at Once" },
+  { "kind": "movie", "tmdbId": 872585, "name": "Oppenheimer" },
+  { "kind": "movie", "tmdbId": 346698, "name": "Barbie" },
+  { "kind": "movie", "tmdbId": 666277, "name": "Past Lives" },
+  { "kind": "movie", "tmdbId": 496243, "name": "Parasite" },
+  { "kind": "movie", "tmdbId": 329865, "name": "Arrival" },
+  { "kind": "tv", "tmdbId": 95396, "name": "Severance" },
+  { "kind": "tv", "tmdbId": 136315, "name": "The Bear" },
+  { "kind": "tv", "tmdbId": 67070, "name": "Fleabag" },
+  { "kind": "tv", "tmdbId": 97546, "name": "Ted Lasso" },
+  { "kind": "tv", "tmdbId": 100088, "name": "The Last of Us" },
+  { "kind": "tv", "tmdbId": 76331, "name": "Succession" }
+]

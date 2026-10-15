@@ -180,6 +180,26 @@ export async function classifyAll(
         }
       }
     }
+    if (!got && !forceFallback && batch.length > 1) {
+      // A failed batch of 40 usually means one malformed answer; two smaller batches almost
+      // always succeed, so try that before handing anything to the backup model.
+      const mid = Math.ceil(batch.length / 2);
+      got = [];
+      for (const half of [batch.slice(0, mid), batch.slice(mid)]) {
+        let part: Label[] | null = null;
+        try {
+          part = await llmBatch(title, half, opts.prescore);
+        } catch {
+          part = null;
+        }
+        if (!part) {
+          usedFallback = true;
+          fallbackReason ??= "a batch failed validation even when split";
+          part = await robertaClassify(half);
+        }
+        got.push(...part);
+      }
+    }
     if (!got) {
       usedFallback = true;
       fallbackReason ??= "batch failed validation twice";

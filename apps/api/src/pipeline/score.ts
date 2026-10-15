@@ -20,6 +20,7 @@ import { BASIC_SUFFIX, currentLlmTag, expectedVersion, llmLabelling } from "./ve
 const YT_RETENTION_MS = 30 * 86_400_000;
 const QUOTE_MAX = 200;
 const QUOTE_MIN_CONFIDENCE = 0.8;
+const BASIC_SHARE_FLAG = 0.1;
 
 export { currentLlmTag };
 
@@ -198,7 +199,10 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
   const mentions = (await prisma.mention.findMany({ where: { titleId } })).filter((m) => isCurrentLabel(m.classifier));
   const counted = mentions.filter((m) => isCounted(m));
   const s = computeScore(mentions);
-  const basic = counted.some((m) => m.classifier === ROBERTA_TAG);
+  // Flag "basic classifier" only when the backup model labelled a meaningful share of what counts;
+  // a stray handful is relabelled by Nemotron on the next refresh anyway.
+  const basicShare = counted.length ? counted.filter((m) => m.classifier === ROBERTA_TAG).length / counted.length : 0;
+  const basic = basicShare > BASIC_SHARE_FLAG;
 
   const sourceCounts: Record<string, number> = {};
   for (const m of counted) sourceCounts[m.source] = (sourceCounts[m.source] ?? 0) + 1;

@@ -54,7 +54,9 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
         else if (e.type === "error") patch(id, (t) => ({ ...t, error: e.message }));
       }
     } catch (e) {
-      patch(id, (t) => ({ ...t, error: e instanceof Error ? e.message : "Something went wrong" }));
+      // Browsers report a blocked or dropped connection as a bare TypeError ("Load failed", "Failed to fetch").
+      const msg = e instanceof TypeError ? "Couldn't reach the picker. Check your connection and try again." : e instanceof Error ? e.message : "Something went wrong";
+      patch(id, (t) => ({ ...t, error: msg }));
     } finally {
       setBusy(false);
     }

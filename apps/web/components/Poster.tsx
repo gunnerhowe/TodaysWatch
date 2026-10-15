@@ -6,7 +6,22 @@ import { useDemo } from "./DemoContext";
 const HUES = [28, 40, 12, 180, 200, 330, 260, 150];
 
 /** Poster, or a plain title card in demo mode (no copyrighted artwork in videos). */
-export function Poster({ name, year, path, size = "w342", className = "" }: { name: string; year: number | null; path: string | null; size?: "w92" | "w185" | "w342" | "w500"; className?: string }) {
+export function Poster({
+  name,
+  year,
+  path,
+  size = "w342",
+  className = "",
+  eager = false,
+}: {
+  name: string;
+  year: number | null;
+  path: string | null;
+  size?: "w92" | "w185" | "w342" | "w500";
+  className?: string;
+  /** load now and show the small thumbnail underneath until it arrives (for dialogs) */
+  eager?: boolean;
+}) {
   const demo = useDemo();
   const url = posterUrl(path, size);
   if (demo || !url) {
@@ -26,6 +41,12 @@ export function Poster({ name, year, path, size = "w342", className = "" }: { na
   return (
     // TMDB images are already sized; next/image would re-optimize them for no gain.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={`${name} poster`} loading="lazy" className={`aspect-[2/3] w-full rounded-lg border border-line object-cover ${className}`} />
+    <img
+      src={url}
+      alt={`${name} poster`}
+      loading={eager ? "eager" : "lazy"}
+      style={eager ? { backgroundImage: `url(${posterUrl(path, "w92")})`, backgroundSize: "cover" } : undefined}
+      className={`aspect-[2/3] w-full rounded-lg border border-line object-cover ${className}`}
+    />
   );
 }

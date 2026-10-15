@@ -185,7 +185,7 @@ function ConfirmCard({ r, onOpen, onBack }: { r: SearchResult; onOpen: () => voi
       >
         <p className="mb-3 text-center text-xs uppercase tracking-[0.2em] text-faint">Is this the one?</p>
         <div className="grid grid-cols-[120px_1fr] gap-4">
-          <Poster name={r.name} year={r.year} path={r.posterPath} size="w342" />
+          <Poster name={r.name} year={r.year} path={r.posterPath} size="w342" eager />
           <div className="min-w-0">
             <h2 id="confirm-title" className="font-display text-2xl font-bold uppercase leading-tight">
               {r.name}

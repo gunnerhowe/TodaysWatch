@@ -23,6 +23,19 @@ export interface Label {
 }
 
 const BATCH = 40;
+const PARALLEL_LABEL_BATCHES = 4;
+const PARALLEL_REVIEW_BATCHES = 3;
+
+const batchStarts = (n: number) => Array.from({ length: Math.ceil(n / BATCH) }, (_, i) => i * BATCH);
+
+/** Run `fn` over `items` with at most `limit` in flight. */
+export async function inParallel<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+}
 
 const LabelZ = z.object({
   i: z.number().int(),
@@ -157,7 +170,8 @@ export async function classifyAll(
     fallbackReason = env.CLASSIFIER === "roberta" ? "CLASSIFIER=roberta" : "LLM not configured";
   }
 
-  for (let start = 0; start < items.length; start += BATCH) {
+  // Batches run a few at a time: one title went from ~15 sequential model calls to ~4 rounds.
+  await inParallel(batchStarts(items.length), PARALLEL_LABEL_BATCHES, async (start) => {
     const batch = items.slice(start, start + BATCH);
     let got: Label[] | null = null;
     if (!forceFallback) {
@@ -207,7 +221,7 @@ export async function classifyAll(
     }
     labels.push(...got);
     opts.onProgress?.(labels.length);
-  }
+  });
   const reviewed = await reviewHardCases(title, items, labels, opts.prescore, opts.onReview);
   return { labels, usedFallback, fallbackReason, reviewed };
 }
@@ -240,14 +254,18 @@ async function reviewHardCases(
   const hard = labels.filter((l) => needsReview(l, byIdx.get(l.idx)?.text));
   let changed = 0;
   if (hard.length) onReview?.(0, hard.length);
-  for (let start = 0; start < hard.length; start += BATCH) {
+  let stopped = false;
+  let done = 0;
+  await inParallel(batchStarts(hard.length), PARALLEL_REVIEW_BATCHES, async (start) => {
+    if (stopped) return;
     const chunk = hard.slice(start, start + BATCH);
     const batch = chunk.map((l) => byIdx.get(l.idx)!).filter(Boolean);
     let second: Label[];
     try {
       second = await llmBatch(title, batch, prescore, { model, review: true });
     } catch {
-      break; // keep Nano's labels for the rest
+      stopped = true; // keep Nano's labels for anything not reviewed yet
+      return;
     }
     for (const s2 of second) {
       const l = labels.find((x) => x.idx === s2.idx);
@@ -255,7 +273,8 @@ async function reviewHardCases(
       if (l.stance !== s2.stance || l.aboutTitle !== s2.aboutTitle || l.firsthand !== s2.firsthand) changed++;
       Object.assign(l, { aboutTitle: s2.aboutTitle, firsthand: s2.firsthand, stance: s2.stance, confidence: s2.confidence });
     }
-    onReview?.(Math.min(start + BATCH, hard.length), hard.length);
-  }
+    done += chunk.length;
+    onReview?.(done, hard.length);
+  });
   return changed;
 }

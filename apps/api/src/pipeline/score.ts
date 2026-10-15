@@ -11,7 +11,7 @@ import * as youtube from "../sources/youtube.ts";
 import { typeToKind } from "../titles.ts";
 import { loadBaselines } from "./baselines.ts";
 import { classifyAll, type ToClassify } from "./classify.ts";
-import { cleanItems, interleaveBySource } from "./clean.ts";
+import { blueskyRelevant, cleanItems, interleaveBySource } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { summarize } from "./summary.ts";
@@ -138,10 +138,20 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
       where: { titleId: t.id, excerpt: { not: "" } },
       select: { id: true, source: true, externalId: true, excerpt: true, classifier: true },
     });
+    // Saved Bluesky posts from before the relevance gate existed: mark off-topic ones without a model call.
+    const offTopic = pending.filter((m) => m.source === "BLUESKY" && !blueskyRelevant(m.excerpt, { name: t.name, year: t.year }));
+    if (offTopic.length) {
+      await prisma.mention.updateMany({
+        where: { id: { in: offTopic.map((m) => m.id) } },
+        data: { aboutTitle: false, firsthand: false, stance: "NONE", confidence: 1, classifier: currentLlmTag(), isQuote: false },
+      });
+      notes.push(`bluesky: ${offTopic.length} saved posts set aside as off-topic`);
+    }
+    const offTopicIds = new Set(offTopic.map((m) => m.id));
     // When Nemotron can label, upgrade any backup-classifier labels too.
     const needsLabel = (c: string | null) => (llmLabelling() ? c !== currentLlmTag() : !isCurrentLabel(c));
     // Fair across sources: otherwise the cap fills up with whichever source was stored first.
-    const todo = interleaveBySource(pending.filter((m) => needsLabel(m.classifier))).slice(0, env.CLASSIFY_MAX_PER_TITLE);
+    const todo = interleaveBySource(pending.filter((m) => !offTopicIds.has(m.id) && needsLabel(m.classifier))).slice(0, env.CLASSIFY_MAX_PER_TITLE);
     const toClassify: ToClassify[] = todo.map((m, idx) => {
       const c = ctx.get(`${m.source}:${m.externalId}`);
       return { idx, text: c?.text ?? m.excerpt, threadTitle: c?.threadTitle ?? null, firsthandContext: c?.firsthandContext ?? false };

@@ -9,6 +9,7 @@ import { env } from "./config.ts";
 import { prisma } from "./db.ts";
 import { startJobs, stopJobs } from "./jobs/index.ts";
 import { registerMcp } from "./mcp/server.ts";
+import { installCrashHandlers } from "./lib/diag.ts";
 import { checkModels } from "./llm/index.ts";
 import { bootQloo, stopQloo } from "./qloo/bridge.ts";
 import { agentRoutes } from "./routes/agent.ts";
@@ -56,6 +57,7 @@ async function migrate(log: (m: string) => void) {
 }
 
 async function main() {
+  installCrashHandlers();
   await migrate((m) => console.log(`[migrate] ${m}`));
   const app = await buildApp();
   await app.listen({ port: env.PORT, host: "0.0.0.0" });

@@ -3,6 +3,7 @@ import { env, sourcesEnabled, VERSION } from "../config.ts";
 import { dbHealthy } from "../db.ts";
 import { enqueuePrescore, jobStatus } from "../jobs/index.ts";
 import { requireAdmin } from "../lib/auth.ts";
+import { diagnostics } from "../lib/diag.ts";
 import { remaining, usageSummary } from "../lib/ledger.ts";
 import { agentModel, classifierModel, lastModelCheck, llmConfigured } from "../llm/index.ts";
 import { qlooReady } from "../qloo/bridge.ts";
@@ -32,6 +33,7 @@ export async function systemRoutes(app: FastifyInstance) {
       sources: sourcesEnabled(),
       jobs: await jobStatus().catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
       version: VERSION,
+      process: await diagnostics(),
     };
   });
 

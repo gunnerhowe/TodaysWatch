@@ -1,3 +1,8 @@
+import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { env } from "./config.ts";
@@ -37,7 +42,20 @@ export async function buildApp() {
   return app;
 }
 
+/**
+ * Apply pending migrations at boot, so the schema exists however the host starts the process
+ * (Railway can override the Dockerfile CMD). Idempotent and quick when already up to date.
+ */
+async function migrate(log: (m: string) => void) {
+  if (!env.DATABASE_URL || process.env.SKIP_MIGRATIONS === "true") return;
+  const cli = createRequire(import.meta.url).resolve("prisma/build/index.js");
+  const schema = resolve(dirname(fileURLToPath(import.meta.url)), "../prisma/schema.prisma");
+  const { stdout } = await promisify(execFile)(process.execPath, [cli, "migrate", "deploy", "--schema", schema], { env: process.env, timeout: 120_000 });
+  log(stdout.trim().split("\n").filter(Boolean).at(-1) ?? "migrations applied");
+}
+
 async function main() {
+  await migrate((m) => console.log(`[migrate] ${m}`));
   const app = await buildApp();
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   const q = await bootQloo();

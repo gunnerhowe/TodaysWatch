@@ -26,4 +26,4 @@ RUN cd apps/api && node --input-type=module -e "const { pipeline, env } = await 
 
 WORKDIR /app/apps/api
 EXPOSE 8080
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node --import tsx src/index.ts"]
+CMD ["pnpm", "start"]

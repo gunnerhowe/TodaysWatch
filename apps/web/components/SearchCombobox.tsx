@@ -40,7 +40,11 @@ export function SearchCombobox({ autoFocus = false, large = false }: { autoFocus
         setActive(r.results.length ? 0 : -1);
         setOpen(true);
       } catch (e) {
-        if (mine === seq.current) setError(e instanceof Error ? e.message : "Search failed");
+        if (mine === seq.current) {
+          setResults([]);
+          setError(e instanceof Error ? e.message : "Search failed");
+          setOpen(true); // show the message instead of looking stuck
+        }
       } finally {
         if (mine === seq.current) setLoading(false);
       }

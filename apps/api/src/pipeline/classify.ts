@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { env } from "../config.ts";
 import { CapExceededError } from "../lib/ledger.ts";
-import { chat, classifierModel, llmConfigured, parseJsonLoose } from "../llm/index.ts";
+import { chat, classifierModel, isRateLimit, llmConfigured, parseJsonLoose } from "../llm/index.ts";
 import { mentionsTheVideo } from "./clean.ts";
 import { robertaClassify } from "./roberta.ts";
 import { currentLlmTag, reviewModel } from "./version.ts";
@@ -185,6 +185,12 @@ export async function classifyAll(
             break;
           }
           const msg = e instanceof Error ? e.message : String(e);
+          // still rate-limited after the llm module's own backoff: give Nebius a breather and
+          // retry this batch rather than handing it to the backup model
+          if (isRateLimit(e)) {
+            await new Promise((r) => setTimeout(r, 30_000));
+            continue;
+          }
           if (/ECONN|ETIMEDOUT|fetch failed|5\d\d|timeout/i.test(msg)) {
             forceFallback = true;
             fallbackReason = "Nebius unavailable";

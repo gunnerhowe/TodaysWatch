@@ -60,6 +60,44 @@ export interface ChatResult {
   latencyMs: number;
 }
 
+/** At most N model calls in flight across the whole server (all titles, the agent, summaries). */
+class Semaphore {
+  private waiting: (() => void)[] = [];
+  private inUse = 0;
+  constructor(private max: number) {}
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.inUse >= this.max) await new Promise<void>((r) => this.waiting.push(r));
+    this.inUse++;
+    try {
+      return await fn();
+    } finally {
+      this.inUse--;
+      this.waiting.shift()?.();
+    }
+  }
+}
+const slots = new Semaphore(env.LLM_MAX_CONCURRENCY);
+
+export function isRateLimit(e: unknown): boolean {
+  const status = (e as { status?: number } | null)?.status;
+  return status === 429 || /\b429\b|rate.?limit|too many requests/i.test(e instanceof Error ? e.message : String(e));
+}
+
+/**
+ * "Too many requests" means wait, not fail. The SDK already retries twice; on top of that,
+ * back off up to ~1 minute in total before giving up. The slot is released while waiting.
+ */
+async function callWithRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isRateLimit(e) || attempt >= 4) throw e;
+      await new Promise((r) => setTimeout(r, 2_000 * 2 ** attempt + Math.random() * 1_000));
+    }
+  }
+}
+
 let client: OpenAI | null = null;
 function nebius(): OpenAI {
   if (!env.NEBIUS_API_KEY) throw new Error("NEBIUS_API_KEY is not set");
@@ -85,7 +123,7 @@ export async function chat(o: ChatOptions): Promise<ChatResult> {
   // Refuse before spending if today's cap is already used up. Never silently goes over.
   await ensureBudget(ledger, 0.0001, !o.prescore);
   const started = Date.now();
-  const res = env.LLM_PROVIDER === "anthropic" ? await anthropicChat(o) : await nebiusChat(o);
+  const res = await callWithRateLimitRetry(() => slots.run(() => (env.LLM_PROVIDER === "anthropic" ? anthropicChat(o) : nebiusChat(o))));
   const cost = costUsd(res.model, res.usage.inputTokens, res.usage.outputTokens);
   await record(ledger, cost);
   return { ...res, costUsd: cost, latencyMs: Date.now() - started };

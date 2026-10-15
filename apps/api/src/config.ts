@@ -31,6 +31,7 @@ const EnvZ = z.object({
 
   CLASSIFIER: z.enum(["llm", "roberta"]).default("llm"),
   CLASSIFY_MAX_PER_TITLE: num(600),
+  LLM_MAX_CONCURRENCY: num(6), // model calls in flight across the whole server
   CLASSIFIER_REVIEW_MODEL: opt, // defaults to LLM_AGENT_MODEL; "none" disables the second opinion
 
   TMDB_API_KEY: opt,

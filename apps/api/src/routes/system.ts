@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { env, sourcesEnabled, VERSION } from "../config.ts";
 import { dbHealthy } from "../db.ts";
-import { enqueuePrescore } from "../jobs/index.ts";
+import { enqueuePrescore, jobStatus } from "../jobs/index.ts";
 import { requireAdmin } from "../lib/auth.ts";
 import { remaining, usageSummary } from "../lib/ledger.ts";
 import { agentModel, classifierModel, lastModelCheck, llmConfigured } from "../llm/index.ts";
@@ -30,6 +30,7 @@ export async function systemRoutes(app: FastifyInstance) {
       nebius,
       youtubeUnitsLeft,
       sources: sourcesEnabled(),
+      jobs: await jobStatus().catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
       version: VERSION,
     };
   });

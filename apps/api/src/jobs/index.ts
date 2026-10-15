@@ -3,12 +3,14 @@ import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { purgeExpiredCache } from "../lib/cache.ts";
 import { recomputeBaselines } from "../pipeline/baselines.ts";
-import { isActive, isRunning, markQueued } from "../pipeline/progress.ts";
+import { isActive, isRunning, markQueued, runningNow } from "../pipeline/progress.ts";
 import { scoreTitle } from "../pipeline/score.ts";
 import { prescoreBatch } from "./prescore.ts";
 
 /** pg-boss keeps its own tables in Postgres, so there's no Redis. */
 let boss: PgBoss | null = null;
+let lastWip: PgBoss.Worker[] = [];
+let lastWorkerError: string | null = null;
 
 const SCORE_WORKERS = 3;
 
@@ -31,6 +33,9 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
   }
   boss = new PgBoss({ connectionString: env.DATABASE_URL, schema: "pgboss" });
   boss.on("error", (e) => log(`pg-boss error: ${e.message}`));
+  boss.on("wip", (data) => {
+    lastWip = data;
+  });
   await boss.start();
   for (const q of Object.values(Q)) await boss.createQueue(q);
 
@@ -39,12 +44,20 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
     await boss.work<ScoreJob>(Q.score, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
       if (!job) return;
       const { titleId, live, enqueuedAt } = job.data;
+      try {
+        await runScoreJob(titleId, live, enqueuedAt);
+      } catch (e) {
+        lastWorkerError = `${new Date().toISOString()} ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`;
+        throw e;
+      }
+    });
+  }
+  async function runScoreJob(titleId: string, live: boolean, enqueuedAt?: number) {
       if (isRunning(titleId)) return; // another worker has it
       // A retry of a job orphaned by a restart: skip if the title was scored after it was queued.
       const t = await prisma.title.findUnique({ where: { id: titleId }, select: { scoredAt: true, scoreState: true } });
       if (!t || (enqueuedAt && t.scoreState !== "PENDING" && t.scoredAt && t.scoredAt.getTime() > enqueuedAt)) return;
       await scoreTitle(titleId, { live });
-    });
   }
   await boss.work(Q.prescore, { batchSize: 1 }, async () => {
     const r = await prescoreBatch(log);
@@ -75,6 +88,21 @@ export async function nightly(log: (m: string) => void) {
   const b = await recomputeBaselines();
   log(`nightly: purged ${purged.count} expired excerpts, ${cache} cache rows; baselines ${b.genres} genres / ${b.titles} titles`);
   await boss?.send(Q.prescore, {}, { singletonKey: "prescore", retryLimit: 0 });
+}
+
+/** Queue and worker state for /health (no secrets: counts, timestamps, title ids, error text). */
+export async function jobStatus() {
+  if (!boss) return { enabled: false };
+  const queued = await boss.getQueueSize(Q.score).catch(() => null);
+  return {
+    enabled: true,
+    queued,
+    running: runningNow(),
+    workers: lastWip
+      .filter((w) => w.name === Q.score)
+      .map((w) => ({ state: w.state, jobsDone: w.count, lastFetchedOn: w.lastFetchedOn, lastJobStartedOn: w.lastJobStartedOn, lastJobEndedOn: w.lastJobEndedOn })),
+    lastWorkerError,
+  };
 }
 
 /** Queue a title for scoring (deduplicated per title). Returns false if jobs are off. */

@@ -29,6 +29,13 @@ export function isRunning(titleId: string): boolean {
   return !!s && s !== "queued" && s !== "ready" && s !== "error";
 }
 
+/** Titles whose runs are executing in this process right now, for /health. */
+export function runningNow(): { titleId: string; stage: string; message: string; secondsAgo: number }[] {
+  return [...last.entries()]
+    .filter(([id]) => isRunning(id))
+    .map(([id, e]) => ({ titleId: id, stage: e.stage, message: e.message, secondsAgo: Math.round((Date.now() - (lastAt.get(id) ?? 0)) / 1000) }));
+}
+
 /** Called when a run is enqueued, so the page streams progress instead of reporting the old score as ready. */
 export function markQueued(titleId: string) {
   if (isActive(titleId)) return; // already queued or running; keep its live message

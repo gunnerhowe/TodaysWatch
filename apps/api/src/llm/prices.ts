@@ -6,9 +6,9 @@ import { env } from "../config.ts";
  * Unknown models fall back to the most expensive known entry so we never under-count spend.
  */
 const DEFAULTS: Record<string, { in: number; out: number }> = {
-  "nvidia/nemotron-3-nano": { in: 0.06, out: 0.24 },
-  "nvidia/nemotron-3-super": { in: 0.3, out: 0.9 },
-  "nvidia/nemotron-3-ultra": { in: 0.9, out: 2.7 },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": { in: 0.06, out: 0.24 },
+  "nvidia/nemotron-3-super-120b-a12b": { in: 0.3, out: 0.9 },
+  "nvidia/Nemotron-3-Ultra-550b-a55b": { in: 0.9, out: 2.7 },
   "claude-sonnet-5-5": { in: 3, out: 15 },
 };
 

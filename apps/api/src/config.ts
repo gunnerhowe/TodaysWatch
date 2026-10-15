@@ -16,8 +16,8 @@ const EnvZ = z.object({
   LLM_PROVIDER: z.enum(["nebius", "anthropic"]).default("nebius"),
   NEBIUS_API_KEY: opt,
   NEBIUS_BASE_URL: z.string().default("https://api.tokenfactory.nebius.com/v1"),
-  LLM_AGENT_MODEL: z.string().default("nvidia/nemotron-3-super"),
-  LLM_CLASSIFIER_MODEL: z.string().default("nvidia/nemotron-3-nano"),
+  LLM_AGENT_MODEL: z.string().default("nvidia/nemotron-3-super-120b-a12b"),
+  LLM_CLASSIFIER_MODEL: z.string().default("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"),
   ANTHROPIC_API_KEY: opt,
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-5-5"),
   LLM_PRICES_JSON: opt, // {"model-id":{"in":0.1,"out":0.4}} USD per 1M tokens

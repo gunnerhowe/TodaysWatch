@@ -16,11 +16,12 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
   const res = await fetch(url, {
     method: req.method,
     headers: {
-      "content-type": "application/json",
+      // only declare JSON when there is a body; the API rejects an empty JSON body (e.g. DELETE)
+      ...(body ? { "content-type": "application/json" } : {}),
       "x-api-secret": process.env.API_SHARED_SECRET ?? "",
       ...(token ? { "x-profile-token": token } : {}),
     },
-    body,
+    body: body || undefined,
     cache: "no-store",
   }).catch(() => null);
   if (!res) return NextResponse.json({ error: "The service is unreachable right now." }, { status: 502 });

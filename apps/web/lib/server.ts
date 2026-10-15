@@ -28,7 +28,7 @@ export async function api<T>(path: string, init: RequestInit & { token?: string 
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
-      "content-type": "application/json",
+      ...(init.body ? { "content-type": "application/json" } : {}),
       "x-api-secret": process.env.API_SHARED_SECRET ?? "",
       ...(token ? { "x-profile-token": token } : {}),
       ...(init.headers ?? {}),

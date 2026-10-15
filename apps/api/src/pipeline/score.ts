@@ -1,8 +1,7 @@
 import type { Mention, Title } from "@prisma/client";
 import { computeScore, genrePercentiles, isCounted, nextRefreshAt, scoreFromCounts } from "@tp/scoring";
-import { env, sourcesEnabled, CLASSIFIER_PROMPT_VERSION } from "../config.ts";
+import { env, sourcesEnabled } from "../config.ts";
 import { prisma } from "../db.ts";
-import { classifierModel } from "../llm/index.ts";
 import * as bluesky from "../sources/bluesky.ts";
 import * as reddit from "../sources/reddit.ts";
 import * as tmdb from "../sources/tmdb.ts";
@@ -16,13 +15,12 @@ import { cleanItems } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { summarize } from "./summary.ts";
+import { BASIC_SUFFIX, currentLlmTag, expectedVersion, llmLabelling } from "./version.ts";
 
 const YT_RETENTION_MS = 30 * 86_400_000;
 const QUOTE_MAX = 200;
 
-export function currentLlmTag(): string {
-  return `${classifierModel()}@${CLASSIFIER_PROMPT_VERSION}`;
-}
+export { currentLlmTag };
 
 /** A mention's label is current if it came from this classifier model + prompt version (or the fallback). */
 export function isCurrentLabel(classifier: string | null): boolean {
@@ -130,7 +128,9 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
       where: { titleId: t.id, excerpt: { not: "" } },
       select: { id: true, source: true, externalId: true, excerpt: true, classifier: true },
     });
-    const todo = pending.filter((m) => !isCurrentLabel(m.classifier)).slice(0, env.CLASSIFY_MAX_PER_TITLE);
+    // When Nemotron can label, upgrade any backup-classifier labels too.
+    const needsLabel = (c: string | null) => (llmLabelling() ? c !== currentLlmTag() : !isCurrentLabel(c));
+    const todo = pending.filter((m) => needsLabel(m.classifier)).slice(0, env.CLASSIFY_MAX_PER_TITLE);
     const toClassify: ToClassify[] = todo.map((m, idx) => {
       const c = ctx.get(`${m.source}:${m.externalId}`);
       return { idx, text: c?.text ?? m.excerpt, threadTitle: c?.threadTitle ?? null, firsthandContext: c?.firsthandContext ?? false };
@@ -181,7 +181,7 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
 
   await chooseQuotes(titleId, counted);
   const summary = opts.skipSummary || s.state === "INSUFFICIENT" ? null : await summarize(t, counted).catch(() => null);
-  const version = basic ? `${currentLlmTag()}+${ROBERTA_TAG}` : currentLlmTag();
+  const version = basic ? `${expectedVersion()}${BASIC_SUFFIX}` : expectedVersion();
 
   await prisma.$transaction([
     prisma.title.update({

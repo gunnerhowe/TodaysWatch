@@ -2,6 +2,7 @@ import type { Title as TitleRow } from "@prisma/client";
 import { GENRE_MIN_TITLES } from "@tp/scoring";
 import type { Score, Title, TitleChip } from "@tp/shared";
 import { prisma } from "./db.ts";
+import { versionIsCurrent } from "./pipeline/version.ts";
 import { getDetails } from "./sources/tmdb.ts";
 
 export type Kind = "movie" | "tv";
@@ -39,6 +40,8 @@ export async function upsertTitle(kind: Kind, tmdbId: number): Promise<TitleRow>
 export function isStale(t: TitleRow): boolean {
   if (t.scoreState === "NONE") return true;
   if (t.scoreState === "PENDING") return false;
+  // made with different sources or the backup classifier than we'd use now
+  if (!versionIsCurrent(t.scoreVersion)) return true;
   return !t.nextRefreshAt || t.nextRefreshAt.getTime() < Date.now();
 }
 

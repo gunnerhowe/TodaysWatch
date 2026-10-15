@@ -94,7 +94,8 @@ async function llmBatch(title: { name: string; year: number | null; type: string
       firsthand: l.firsthand,
       stance: l.stance.toUpperCase() as Label["stance"],
       confidence: l.confidence,
-      classifier: `${res.model}@${CLASSIFIER_PROMPT_VERSION}`,
+      // tag with the configured ID, not the echoed one, so versions compare exactly
+      classifier: `${model}@${CLASSIFIER_PROMPT_VERSION}`,
     };
   });
 }

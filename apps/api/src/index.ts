@@ -9,6 +9,7 @@ import { env } from "./config.ts";
 import { prisma } from "./db.ts";
 import { startJobs, stopJobs } from "./jobs/index.ts";
 import { registerMcp } from "./mcp/server.ts";
+import { checkModels } from "./llm/index.ts";
 import { bootQloo, stopQloo } from "./qloo/bridge.ts";
 import { agentRoutes } from "./routes/agent.ts";
 import { pairRoutes } from "./routes/pairs.ts";
@@ -60,6 +61,7 @@ async function main() {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   const q = await bootQloo();
   app.log.info({ qloo: q }, "qloo bridge");
+  app.log.info({ models: await checkModels() }, "model check");
   await startJobs((m) => app.log.info(m)).catch((e) => app.log.error(e, "jobs failed to start"));
 
   const shutdown = async () => {

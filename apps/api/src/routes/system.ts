@@ -4,7 +4,7 @@ import { dbHealthy } from "../db.ts";
 import { enqueuePrescore } from "../jobs/index.ts";
 import { requireAdmin } from "../lib/auth.ts";
 import { remaining, usageSummary } from "../lib/ledger.ts";
-import { agentModel, llmConfigured } from "../llm/index.ts";
+import { agentModel, classifierModel, lastModelCheck, llmConfigured } from "../llm/index.ts";
 import { qlooReady } from "../qloo/bridge.ts";
 
 export async function systemRoutes(app: FastifyInstance) {
@@ -13,7 +13,16 @@ export async function systemRoutes(app: FastifyInstance) {
     const db = await dbHealthy();
     const q = qlooReady();
     const youtubeUnitsLeft = db && env.YOUTUBE_API_KEY ? await remaining("youtube_units", true).catch(() => null) : null;
-    const nebius = { ready: llmConfigured(), model: agentModel(), ...(llmConfigured() ? {} : { detail: `${env.LLM_PROVIDER} key missing` }) };
+    // "ready" means the key is set AND, once checked, both configured model IDs exist.
+    const mc = lastModelCheck();
+    const modelsOk = !mc.checked || (!!mc.agentFound && !!mc.classifierFound);
+    const nebius = {
+      ready: llmConfigured() && modelsOk,
+      model: agentModel(),
+      classifierModel: classifierModel(),
+      ...(mc.checked ? { agentModelFound: mc.agentFound, classifierModelFound: mc.classifierFound, availableNemotron: mc.nemotron } : {}),
+      ...(!llmConfigured() ? { detail: `${env.LLM_PROVIDER} key missing` } : !modelsOk ? { detail: "a configured model ID was not found; pick from availableNemotron" } : mc.detail ? { detail: mc.detail } : {}),
+    };
     return {
       ok: db && q.ok && nebius.ready,
       db,

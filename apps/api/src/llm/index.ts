@@ -154,6 +154,39 @@ export async function listModels(): Promise<string[]> {
   return page.data.map((m) => m.id).sort();
 }
 
+export interface ModelCheck {
+  checked: boolean;
+  agentFound?: boolean;
+  classifierFound?: boolean;
+  /** Nemotron IDs this key can use, so LLM_AGENT_MODEL / LLM_CLASSIFIER_MODEL can be set exactly */
+  nemotron?: string[];
+  detail?: string;
+}
+
+let modelCheck: ModelCheck = { checked: false };
+
+/** Run once at boot: are the configured model IDs real on Token Factory? Never throws. */
+export async function checkModels(): Promise<ModelCheck> {
+  if (env.LLM_PROVIDER !== "nebius" || !env.NEBIUS_API_KEY) {
+    modelCheck = { checked: false, detail: "nebius not configured" };
+    return modelCheck;
+  }
+  try {
+    const ids = await listModels();
+    modelCheck = {
+      checked: true,
+      agentFound: ids.includes(env.LLM_AGENT_MODEL),
+      classifierFound: ids.includes(env.LLM_CLASSIFIER_MODEL),
+      nemotron: ids.filter((id) => /nemotron/i.test(id)),
+    };
+  } catch (e) {
+    modelCheck = { checked: false, detail: `model list failed: ${e instanceof Error ? e.message.slice(0, 120) : e}` };
+  }
+  return modelCheck;
+}
+
+export const lastModelCheck = () => modelCheck;
+
 /** Parse a JSON object out of a model reply (tolerates code fences and leading prose). */
 export function parseJsonLoose(s: string | null): unknown {
   if (!s) throw new Error("empty reply");

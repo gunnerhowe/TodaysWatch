@@ -2,6 +2,7 @@ import type { Title as TitleRow } from "@prisma/client";
 import { GENRE_MIN_TITLES } from "@tp/scoring";
 import type { Score, Title, TitleChip } from "@tp/shared";
 import { prisma } from "./db.ts";
+import { isActive } from "./pipeline/progress.ts";
 import { versionIsCurrent } from "./pipeline/version.ts";
 import { getDetails } from "./sources/tmdb.ts";
 
@@ -10,6 +11,7 @@ export const kindToType = (k: Kind) => (k === "movie" ? "MOVIE" : "TV") as "MOVI
 export const typeToKind = (t: "MOVIE" | "TV"): Kind => (t === "MOVIE" ? "movie" : "tv");
 
 const DETAILS_TTL = 7 * 86_400_000;
+const ORPHAN_GRACE_MS = 90_000;
 
 /** Create or refresh a title row from TMDB details. */
 export async function upsertTitle(kind: Kind, tmdbId: number): Promise<TitleRow> {
@@ -39,7 +41,9 @@ export async function upsertTitle(kind: Kind, tmdbId: number): Promise<TitleRow>
 
 export function isStale(t: TitleRow): boolean {
   if (t.scoreState === "NONE") return true;
-  if (t.scoreState === "PENDING") return false;
+  // "In progress" with nothing queued or running here (e.g. the server restarted mid-run):
+  // requeue it after a short grace period instead of leaving the page waiting forever.
+  if (t.scoreState === "PENDING") return !isActive(t.id) && Date.now() - t.updatedAt.getTime() > ORPHAN_GRACE_MS;
   // made with different sources or the backup classifier than we'd use now
   if (!versionIsCurrent(t.scoreVersion)) return true;
   return !t.nextRefreshAt || t.nextRefreshAt.getTime() < Date.now();

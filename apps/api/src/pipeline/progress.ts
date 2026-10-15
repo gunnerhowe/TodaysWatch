@@ -23,6 +23,12 @@ export function isActive(titleId: string): boolean {
   return !(s === "queued" && Date.now() - (lastAt.get(titleId) ?? 0) > QUEUED_EXPIRES_MS);
 }
 
+/** True while a run for this title is actually executing in this process (not just waiting). */
+export function isRunning(titleId: string): boolean {
+  const s = last.get(titleId)?.stage;
+  return !!s && s !== "queued" && s !== "ready" && s !== "error";
+}
+
 /** Called when a run is enqueued, so the page streams progress instead of reporting the old score as ready. */
 export function markQueued(titleId: string) {
   if (isActive(titleId)) return; // already queued or running; keep its live message

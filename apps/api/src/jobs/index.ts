@@ -3,7 +3,7 @@ import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { purgeExpiredCache } from "../lib/cache.ts";
 import { recomputeBaselines } from "../pipeline/baselines.ts";
-import { markQueued } from "../pipeline/progress.ts";
+import { isActive, isRunning, markQueued } from "../pipeline/progress.ts";
 import { scoreTitle } from "../pipeline/score.ts";
 import { prescoreBatch } from "./prescore.ts";
 
@@ -11,6 +11,12 @@ import { prescoreBatch } from "./prescore.ts";
 let boss: PgBoss | null = null;
 
 const SCORE_WORKERS = 3;
+
+interface ScoreJob {
+  titleId: string;
+  live: boolean;
+  enqueuedAt?: number;
+}
 
 export const Q = {
   score: "score-title",
@@ -30,9 +36,14 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
 
   // Live scoring: three workers, so one slow title doesn't make everyone else wait in line.
   for (let w = 0; w < SCORE_WORKERS; w++) {
-    await boss.work<{ titleId: string; live: boolean }>(Q.score, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
+    await boss.work<ScoreJob>(Q.score, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
       if (!job) return;
-      await scoreTitle(job.data.titleId, { live: job.data.live });
+      const { titleId, live, enqueuedAt } = job.data;
+      if (isRunning(titleId)) return; // another worker has it
+      // A retry of a job orphaned by a restart: skip if the title was scored after it was queued.
+      const t = await prisma.title.findUnique({ where: { id: titleId }, select: { scoredAt: true, scoreState: true } });
+      if (!t || (enqueuedAt && t.scoreState !== "PENDING" && t.scoredAt && t.scoredAt.getTime() > enqueuedAt)) return;
+      await scoreTitle(titleId, { live });
     });
   }
   await boss.work(Q.prescore, { batchSize: 1 }, async () => {
@@ -42,6 +53,11 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
   await boss.work(Q.nightly, { batchSize: 1 }, async () => {
     await nightly(log);
   });
+
+  // Runs cut off by a restart leave titles "in progress"; pick them back up.
+  const orphaned = await prisma.title.findMany({ where: { scoreState: "PENDING" }, select: { id: true } });
+  for (const t of orphaned) await enqueueScore(t.id, true);
+  if (orphaned.length) log(`requeued ${orphaned.length} titles left in progress by a restart`);
 
   // 07:00 UTC = 1-2 am Central. Pre-scoring runs right after baselines are refreshed.
   await boss.schedule(Q.nightly, "0 7 * * *", {}, { tz: "UTC" });
@@ -63,13 +79,16 @@ export async function nightly(log: (m: string) => void) {
 
 /** Queue a title for scoring (deduplicated per title). Returns false if jobs are off. */
 export async function enqueueScore(titleId: string, live: boolean): Promise<boolean> {
+  if (isActive(titleId)) return true; // already queued or running in this process
   markQueued(titleId);
   if (!boss) {
     // No queue (e.g. local dev without jobs): run inline in the background.
     void scoreTitle(titleId, { live }).catch(() => {});
     return true;
   }
-  await boss.send(Q.score, { titleId, live }, { singletonKey: titleId, singletonSeconds: 600, retryLimit: 1, expireInSeconds: 1800 });
+  // No singletonKey: after a restart the dead run's job still looks active and would block a
+  // requeue for up to 30 minutes. Duplicates are prevented in-process above and by the worker guard.
+  await boss.send(Q.score, { titleId, live, enqueuedAt: Date.now() } satisfies ScoreJob, { retryLimit: 1, expireInSeconds: 1800 });
   return true;
 }
 

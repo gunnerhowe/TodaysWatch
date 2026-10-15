@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawItem } from "../sources/types.ts";
-import { cleanItems, excerptOf, interleaveBySource, isLinkOnly, jaccard, looksEnglish, wordCount } from "./clean.ts";
+import { blueskyRelevant, cleanItems, excerptOf, interleaveBySource, isLinkOnly, jaccard, looksEnglish, wordCount } from "./clean.ts";
 
 let n = 0;
 const item = (text: string, over: Partial<RawItem> = {}): RawItem => ({
@@ -117,5 +117,25 @@ describe("interleaveBySource", () => {
     expect(out.slice(0, 3).map((x) => x.source)).toEqual(["YOUTUBE", "BLUESKY", "TMDB_REVIEW"]);
     expect(out.slice(0, 6).map((x) => x.source)).toEqual(["YOUTUBE", "BLUESKY", "TMDB_REVIEW", "YOUTUBE", "BLUESKY", "YOUTUBE"]);
     expect(out.filter((x) => x.source === "YOUTUBE").map((x) => x.i)).toEqual([0, 1, 2, 3, 4]);
+  });
+});
+
+describe("blueskyRelevant", () => {
+  const office = { name: "The Office", year: 2005 };
+  it("drops posts that only use the title's words", () => {
+    expect(blueskyRelevant("every time I get to work after 1.5hrs I remember I live 15 miles from the office", office)).toBe(false);
+    expect(blueskyRelevant("The office coffee machine is broken again", office)).toBe(false);
+  });
+  it("keeps posts that are about the show", () => {
+    expect(blueskyRelevant("rewatching the office for the fifth time", office)).toBe(true);
+    expect(blueskyRelevant("nothing beats The Office on a bad day", office)).toBe(true);
+    expect(blueskyRelevant("#TheOffice is comfort TV", office)).toBe(true);
+    expect(blueskyRelevant('just finished "the office" and I am crying', office)).toBe(true);
+  });
+  it("keeps clearly titled single-word films", () => {
+    const smile = { name: "Smile", year: 2022 };
+    expect(blueskyRelevant("Smile at strangers today, it helps", smile)).toBe(false);
+    expect(blueskyRelevant("honestly Smile scared me more than anything this year", smile)).toBe(true);
+    expect(blueskyRelevant("Smile (2022) was terrifying", smile)).toBe(true);
   });
 });

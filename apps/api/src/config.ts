@@ -31,6 +31,7 @@ const EnvZ = z.object({
 
   CLASSIFIER: z.enum(["llm", "roberta"]).default("llm"),
   CLASSIFY_MAX_PER_TITLE: num(600),
+  CLASSIFIER_REVIEW_MODEL: opt, // defaults to LLM_AGENT_MODEL; "none" disables the second opinion
 
   TMDB_API_KEY: opt,
   YOUTUBE_API_KEY: opt,
@@ -74,7 +75,7 @@ export function sourcesEnabled() {
   };
 }
 
-export const CLASSIFIER_PROMPT_VERSION = "cls-v2";
+export const CLASSIFIER_PROMPT_VERSION = "cls-v3";
 export const VERSION = "1.0.0";
 
 export function scoreVersion(classifier: string): string {

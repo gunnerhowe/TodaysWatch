@@ -21,10 +21,11 @@ A source with no credentials is switched off and `/health` and the UI list only 
 In order:
 
 1. Drop anything posted before the release or premiere date (removes trailer hype).
-2. Drop link-only posts, items under 4 words, likely bots, and non-English text (Latin-script check, English function words, and a foreign-function-word check).
-3. Hash the author handle (`sha256(salt:source:handle)`) and keep **one opinion per author per title**, the longest. Raw handles are never stored.
-4. Remove exact duplicates (normalized-text hash) and near-duplicates (3-word shingle Jaccard ≥ 0.8), keeping the longer text.
-5. Cap at 1,000 items, sampled proportionally across sources (largest-remainder quotas), most-liked first within a source.
+2. **Bluesky relevance:** search matches any post containing the title's words (so *The Office* also finds posts about commuting). A Bluesky post is kept only with a sign it's about the title: a media word (season, episode, watched, film…), the title as a hashtag, in quotes or with its year, or written with its own capitalization mid-sentence. YouTube comments sit under review videos of the title, so they don't need this.
+3. Drop link-only posts, items under 4 words, likely bots, and non-English text (Latin-script check, English function words, and a foreign-function-word check).
+4. Hash the author handle (`sha256(salt:source:handle)`) and keep **one opinion per author per title**, the longest. Raw handles are never stored.
+5. Remove exact duplicates (normalized-text hash) and near-duplicates (3-word shingle Jaccard ≥ 0.8), keeping the longer text.
+6. Cap at 1,000 items, sampled proportionally across sources (largest-remainder quotas), most-liked first within a source.
 
 Stored text is an excerpt of at most 280 characters with its source link. YouTube excerpts are blanked after 30 days (developer policy); the labels and counts stay.
 
@@ -35,6 +36,7 @@ Stored text is an excerpt of at most 280 characters with its source link. YouTub
 - The prompt has 16 labelled examples (sarcasm, mixed verdicts, hype, off-topic, a prompt-injection attempt, and complaints about one part of a title from people who love it) and treats every comment as untrusted data.
 - The verdict is on the **whole title**: a complaint about one season, ending or character exit from someone who clearly loves the show is "liked" (or "mixed"), not "disliked". Added in prompt `cls-v2` after a live review of *The Office* found fans' complaints about the post-Michael seasons labelled as dislikes.
 - Per item: `about_title`, `firsthand` (official post-release discussion threads and logged reviews count as firsthand unless the text says otherwise), `stance` (`liked`, `mixed`, `disliked`, `none`), `confidence`.
+- **Second opinion:** every `disliked` or `mixed` verdict, and every label below 0.75 confidence, is re-judged by Nemotron 3 Super (`CLASSIFIER_REVIEW_MODEL`, default the agent model); its verdict replaces Nano's. These are where visible mistakes cluster. If the reviewer fails or hits the spend cap, Nano's labels stand. Each run's notes report how many labels the review changed.
 - **Fallback:** Cardiff RoBERTa sentiment (`Xenova/twitter-roberta-base-sentiment-latest`, ONNX, in-process) when the spend cap is hit, Nebius is down, or a batch fails validation twice. Positive → liked, negative → disliked, neutral → mixed only at ≥ 0.7, else none. Scores that include fallback labels show "basic classifier".
 - **Versioning:** each label records `model@prompt-version`. Changing either makes old labels non-current, so they're reclassified before counting; old and new numbers never mix. Each score snapshot records its version.
 

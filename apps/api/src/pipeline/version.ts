@@ -1,5 +1,5 @@
 import { CLASSIFIER_PROMPT_VERSION, env, sourcesEnabled } from "../config.ts";
-import { classifierModel, llmConfigured } from "../llm/index.ts";
+import { agentModel, classifierModel, llmConfigured } from "../llm/index.ts";
 
 /**
  * A score's version records how it was made: classifier model + prompt version, and which
@@ -8,8 +8,15 @@ import { classifierModel, llmConfigured } from "../llm/index.ts";
  * numbers never mix.
  */
 
+/** Model that re-judges hard cases (defaults to the agent model, Nemotron Super). "none" turns it off. */
+export function reviewModel(): string | null {
+  const m = env.CLASSIFIER_REVIEW_MODEL ?? agentModel();
+  return m === "none" ? null : m;
+}
+
 export function currentLlmTag(): string {
-  return `${classifierModel()}@${CLASSIFIER_PROMPT_VERSION}`;
+  const r = reviewModel();
+  return `${classifierModel()}${r ? `+review:${r}` : ""}@${CLASSIFIER_PROMPT_VERSION}`;
 }
 
 /** True when Nemotron should be labelling (configured and not forced to the fallback). */

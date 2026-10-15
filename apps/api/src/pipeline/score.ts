@@ -110,7 +110,7 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
   try {
     const { items: raw, notes, failed } = await collect(t, opts.live, p);
     p.emit("cleaning", "Filtering");
-    const { items: clean } = cleanItems(raw, { releaseDate: t.releaseDate, cap: 1000 });
+    const { items: clean } = cleanItems(raw, { releaseDate: t.releaseDate, cap: 1000, title: { name: t.name, year: t.year } });
 
     // Store new mentions; keep existing ones (and their labels) on refresh.
     const now = Date.now();
@@ -154,6 +154,9 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
         p.emit("classifying");
       },
     });
+    notes.push(
+      `classifier: ${outcome.labels.length} labelled, ${outcome.reviewed} changed on second opinion${outcome.usedFallback ? ` (backup classifier used: ${outcome.fallbackReason})` : ""}`,
+    );
     await prisma.$transaction(
       outcome.labels.map((l) =>
         prisma.mention.update({

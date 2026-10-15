@@ -23,6 +23,7 @@ export interface CleanStats {
   linkOnly: number;
   bot: number;
   nonEnglish: number;
+  offTopic: number;
   preRelease: number;
   duplicate: number;
   sameAuthor: number;
@@ -105,6 +106,8 @@ export function excerptOf(text: string, max = EXCERPT_MAX): string {
 
 export interface CleanOptions {
   releaseDate: Date | null;
+  /** when set, Bluesky posts must pass blueskyRelevant() for this title */
+  title?: { name: string; year: number | null };
   cap?: number;
   nearDupThreshold?: number;
 }
@@ -115,7 +118,7 @@ export interface CleanOptions {
  * duplicates, keep one opinion per author (the longest), cap with proportional sampling.
  */
 export function cleanItems(raw: RawItem[], opts: CleanOptions): { items: CleanItem[]; stats: CleanStats } {
-  const stats: CleanStats = { input: raw.length, short: 0, linkOnly: 0, bot: 0, nonEnglish: 0, preRelease: 0, duplicate: 0, sameAuthor: 0, capped: 0, output: 0 };
+  const stats: CleanStats = { input: raw.length, short: 0, linkOnly: 0, bot: 0, nonEnglish: 0, offTopic: 0, preRelease: 0, duplicate: 0, sameAuthor: 0, capped: 0, output: 0 };
   const cap = opts.cap ?? 1000;
   const threshold = opts.nearDupThreshold ?? 0.8;
 
@@ -131,6 +134,10 @@ export function cleanItems(raw: RawItem[], opts: CleanOptions): { items: CleanIt
     }
     if (wordCount(r.text) < 4) {
       stats.short++;
+      continue;
+    }
+    if (opts.title && r.source === "BLUESKY" && !blueskyRelevant(r.text, opts.title)) {
+      stats.offTopic++;
       continue;
     }
     if (looksBot(r)) {
@@ -226,4 +233,31 @@ export function interleaveBySource<T extends { source: string }>(items: T[]): T[
   const out: T[] = [];
   for (let i = 0; out.length < items.length; i++) for (const l of lists) if (l[i]) out.push(l[i]!);
   return out;
+}
+
+/** Words that show a post is about watching something, not just using the title's words. */
+const MEDIA_CUES =
+  /\b(show|shows|series|season|seasons|episode|episodes|ep|eps|pilot|finale|watch|watched|watching|rewatch|rewatched|rewatching|binge|binged|binging|movie|movies|film|films|sitcom|cast|actor|actress|character|characters|scene|scenes|plot|ending|director|directed|screenplay|cinema|theater|theatre|streaming|netflix|hulu|peacock|max|prime|disney|apple tv|imax|sequel|prequel|spoiler|spoilers)\b/i;
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Bluesky search matches any post containing the title's words, so "the office" also finds
+ * posts about commuting. Keep a post only when something shows it's about the title:
+ * a media word, a hashtag of the title, the title in quotes or with its year, or the title
+ * written with its own capitalization somewhere other than the start of a sentence.
+ */
+export function blueskyRelevant(text: string, title: { name: string; year: number | null }): boolean {
+  if (MEDIA_CUES.test(text)) return true;
+  const name = title.name.trim();
+  const tag = `#${name.replace(/[^A-Za-z0-9]/g, "")}`;
+  if (new RegExp(`${escapeRe(tag)}\\b`, "i").test(text)) return true;
+  const n = escapeRe(name);
+  if (new RegExp(`["“'‘]${n}["”'’]`, "i").test(text)) return true;
+  if (title.year && new RegExp(`${n}\\W{0,3}\\(?${title.year}`, "i").test(text)) return true;
+  // exact capitalization, not at the start of the text or a sentence
+  if (/[A-Z]/.test(name) && new RegExp(`[a-z0-9,;:]\\s+${n}\\b`).test(text)) return true;
+  return false;
 }

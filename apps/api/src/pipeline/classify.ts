@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { env, CLASSIFIER_PROMPT_VERSION } from "../config.ts";
+import { env } from "../config.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { chat, classifierModel, llmConfigured, parseJsonLoose } from "../llm/index.ts";
 import { robertaClassify } from "./roberta.ts";
+import { currentLlmTag, reviewModel } from "./version.ts";
 
 export interface ToClassify {
   idx: number;
@@ -63,6 +64,13 @@ Examples (title: "Example Film"):
 14. "Rewatched the whole thing again but I always stop after season 5, it's not the same without him" -> true, true, liked, 0.75
 15. "Loved the first half, the last two seasons ruined it for me" -> true, true, mixed, 0.8
 16. "Overrated. Boring characters and I never got the hype" -> true, true, disliked, 0.9
+17. (title "The Office") "I live 15 miles from the office and the commute still takes an hour" -> false, false, none, 0.95
+18. "When she said that line my jaw dropped, I had to pause it" -> true, true, liked, 0.75
+19. "I can't believe they ended it like that, I screamed" -> true, true, mixed, 0.5
+
+When a title is made of everyday words, check the item is about the movie or show and not
+the ordinary thing (an actual office, a smile, a bear). Strong reactions ("my jaw dropped",
+"I screamed", "I'm not okay") are usually excitement, not dislike; read them in context.
 
 Reply with JSON only: {"labels":[{"i":<item number>,"about_title":bool,"firsthand":bool,"stance":"...","confidence":0.0}]} with one entry per item, in order.`;
 
@@ -76,16 +84,22 @@ function userPrompt(title: { name: string; year: number | null; type: string }, 
   return `Title: "${title.name}"${title.year ? ` (${title.year})` : ""}, a ${title.type === "TV" ? "TV show" : "movie"}.\n<items>\n${JSON.stringify(items)}\n</items>`;
 }
 
-async function llmBatch(title: { name: string; year: number | null; type: string }, batch: ToClassify[], prescore: boolean): Promise<Label[]> {
-  const model = classifierModel();
+async function llmBatch(
+  title: { name: string; year: number | null; type: string },
+  batch: ToClassify[],
+  prescore: boolean,
+  opts: { model?: string; review?: boolean } = {},
+): Promise<Label[]> {
+  const model = opts.model ?? classifierModel();
   const res = await chat({
     model,
     purpose: "classify",
     prescore,
     temperature: 0,
     json: true,
-    noReasoning: true,
-    maxTokens: 4000,
+    // the review pass may reason: it only sees the hard cases
+    noReasoning: !opts.review,
+    maxTokens: opts.review ? 12000 : 4000,
     messages: [
       { role: "system", content: CLASSIFIER_SYSTEM },
       { role: "user", content: userPrompt(title, batch) },
@@ -102,8 +116,8 @@ async function llmBatch(title: { name: string; year: number | null; type: string
       firsthand: l.firsthand,
       stance: l.stance.toUpperCase() as Label["stance"],
       confidence: l.confidence,
-      // tag with the configured ID, not the echoed one, so versions compare exactly
-      classifier: `${model}@${CLASSIFIER_PROMPT_VERSION}`,
+      // one tag for the whole pipeline (Nano + reviewer + prompt version), so versions compare exactly
+      classifier: currentLlmTag(),
     };
   });
 }
@@ -112,6 +126,8 @@ export interface ClassifyOutcome {
   labels: Label[];
   usedFallback: boolean;
   fallbackReason: string | null;
+  /** labels the reviewer model changed */
+  reviewed: number;
 }
 
 /**
@@ -163,5 +179,50 @@ export async function classifyAll(
     labels.push(...got);
     opts.onProgress?.(labels.length);
   }
-  return { labels, usedFallback, fallbackReason };
+  const reviewed = await reviewHardCases(title, items, labels, opts.prescore);
+  return { labels, usedFallback, fallbackReason, reviewed };
+}
+
+/** A label worth a second opinion: any non-positive verdict, or one Nano wasn't sure of. */
+export function needsReview(l: Pick<Label, "stance" | "confidence" | "classifier">): boolean {
+  if (!l.classifier.startsWith(classifierModel())) return false; // never the RoBERTa fallback
+  return l.stance === "DISLIKED" || l.stance === "MIXED" || l.confidence < REVIEW_BELOW;
+}
+
+const REVIEW_BELOW = 0.75;
+
+/**
+ * Second opinion: the larger Nemotron model re-judges every disliked or mixed verdict and every
+ * low-confidence label, and its verdict replaces Nano's. These are where visible mistakes
+ * cluster (a fan's complaint read as a dislike, an off-topic post). If the reviewer fails or
+ * the spend cap is hit, Nano's labels stand. Mutates `labels` in place; returns how many changed.
+ */
+async function reviewHardCases(
+  title: { name: string; year: number | null; type: string },
+  items: ToClassify[],
+  labels: Label[],
+  prescore: boolean,
+): Promise<number> {
+  const model = reviewModel();
+  if (!model) return 0;
+  const byIdx = new Map(items.map((it) => [it.idx, it]));
+  const hard = labels.filter(needsReview);
+  let changed = 0;
+  for (let start = 0; start < hard.length; start += BATCH) {
+    const chunk = hard.slice(start, start + BATCH);
+    const batch = chunk.map((l) => byIdx.get(l.idx)!).filter(Boolean);
+    let second: Label[];
+    try {
+      second = await llmBatch(title, batch, prescore, { model, review: true });
+    } catch {
+      break; // keep Nano's labels for the rest
+    }
+    for (const s2 of second) {
+      const l = labels.find((x) => x.idx === s2.idx);
+      if (!l) continue;
+      if (l.stance !== s2.stance || l.aboutTitle !== s2.aboutTitle || l.firsthand !== s2.firsthand) changed++;
+      Object.assign(l, { aboutTitle: s2.aboutTitle, firsthand: s2.firsthand, stance: s2.stance, confidence: s2.confidence });
+    }
+  }
+  return changed;
 }

@@ -31,21 +31,28 @@ function ref(t: Title): TitleRef {
   return { id: t.id, tmdbId: t.tmdbId, type: t.type, name: t.name, year: t.year, releaseDate: t.releaseDate };
 }
 
-async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ items: RawItem[]; notes: string[] }> {
+async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ items: RawItem[]; notes: string[]; failed: boolean }> {
   const on = sourcesEnabled();
   const r = ref(t);
   const items: RawItem[] = [];
   const notes: string[] = [];
+  let failed = false;
   const add = (list: RawItem[]) => {
     items.push(...list);
     p.collected = items.length;
     p.emit("collecting");
   };
-  const attempt = async (name: string, fn: () => Promise<void>) => {
+  const attempt = async (name: string, fn: () => Promise<string | void>) => {
+    const before = items.length;
     try {
-      await fn();
+      const detail = await fn();
+      notes.push(`${name}: ${detail ?? `${items.length - before} items`}`);
     } catch (e) {
-      if (!(e instanceof SourceDisabledError)) notes.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+      if (e instanceof SourceDisabledError) return;
+      failed = true;
+      const msg = `${name} failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`;
+      notes.push(msg);
+      console.warn(`[collect] ${t.name} (${t.year}) ${msg}`);
     }
   };
 
@@ -68,13 +75,16 @@ async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ item
       }
       p.threads += ids.length;
       p.emit("collecting");
+      if (ids.length === 0) return "no post-release review or reaction videos found";
+      const before = items.length;
       add(await youtube.fetchComments(ids, live));
+      return `${ids.length} videos, ${items.length - before} comments`;
     });
 
   if (on.BLUESKY) await attempt("bluesky", async () => add(await bluesky.searchPosts(r)));
   if (on.TMDB_REVIEW) await attempt("tmdb_reviews", async () => add(await tmdb.fetchReviews(typeToKind(t.type), t.tmdbId)));
   if (on.TRAKT) await attempt("trakt", async () => add(await trakt.fetchComments(r)));
-  return { items, notes };
+  return { items, notes, failed };
 }
 
 export interface ScoreRunResult {
@@ -98,7 +108,7 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
   p.emit("resolving", "Looking for discussion");
 
   try {
-    const { items: raw, notes } = await collect(t, opts.live, p);
+    const { items: raw, notes, failed } = await collect(t, opts.live, p);
     p.emit("cleaning", "Filtering");
     const { items: clean } = cleanItems(raw, { releaseDate: t.releaseDate, cap: 1000 });
 
@@ -154,8 +164,10 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
 
     p.emit("scoring", "Scoring");
     const result = await recomputeScore(t.id);
+    // A source errored (not just "found nothing"): try again in 6 hours instead of waiting days.
+    if (failed) await prisma.title.update({ where: { id: t.id }, data: { nextRefreshAt: new Date(Date.now() + 6 * 3_600_000) } });
     p.classified = result.counted;
-    p.emit("ready", "Score ready");
+    p.emit("ready", "Score ready", notes);
     return { titleId: t.id, collected: raw.length, cleaned: clean.length, classified: outcome.labels.length, counted: result.counted, state: result.state, notes };
   } catch (e) {
     await prisma.title.update({ where: { id: t.id }, data: { scoreState: t.scoreState === "PENDING" ? "NONE" : t.scoreState } }).catch(() => {});

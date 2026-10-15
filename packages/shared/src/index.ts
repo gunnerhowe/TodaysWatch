@@ -74,6 +74,8 @@ export const ProgressEventZ = z.object({
   collected: z.number().int().optional(),
   classified: z.number().int().optional(),
   message: z.string(),
+  /** per-source outcome of the last run, e.g. "youtube: 3 videos, 412 comments" or the source's error */
+  notes: z.array(z.string()).optional(),
 });
 export type ProgressEvent = z.infer<typeof ProgressEventZ>;
 

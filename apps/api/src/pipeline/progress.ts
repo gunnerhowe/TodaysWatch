@@ -27,7 +27,7 @@ export class ProgressLine {
   collected = 0;
   classified = 0;
   constructor(private titleId: string) {}
-  emit(stage: ProgressEvent["stage"], extra?: string) {
+  emit(stage: ProgressEvent["stage"], extra?: string, notes?: string[]) {
     const parts: string[] = [];
     if (this.threads) parts.push(`Found ${this.threads} discussion thread${this.threads === 1 ? "" : "s"}`);
     if (this.collected) parts.push(`Collected ${this.collected} comments`);
@@ -39,6 +39,7 @@ export class ProgressLine {
       collected: this.collected,
       classified: this.classified,
       message: parts.join(" · ") || "Starting…",
+      ...(notes?.length ? { notes } : {}),
     });
   }
 }

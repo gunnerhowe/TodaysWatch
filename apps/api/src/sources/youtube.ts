@@ -16,13 +16,19 @@ async function yt<T>(path: string, params: Record<string, string>, units: number
   url.searchParams.set("key", env.YOUTUBE_API_KEY);
   const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   await record("youtube_units", units);
-  if (res.status === 403) {
+  if (!res.ok) {
     const body = await res.text();
     // comments disabled on a video is a normal, skippable condition
-    if (body.includes("commentsDisabled")) return { items: [] } as T;
-    throw new Error(`YouTube ${path} 403`);
+    if (res.status === 403 && body.includes("commentsDisabled")) return { items: [] } as T;
+    let reason = "";
+    try {
+      const err = (JSON.parse(body) as { error?: { message?: string; errors?: { reason?: string }[] } }).error;
+      reason = [err?.errors?.[0]?.reason, err?.message].filter(Boolean).join(": ");
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(`YouTube ${path} -> ${res.status}${reason ? ` (${reason.replace(/key=[^&\s]+/g, "key=…").slice(0, 160)})` : ""}`);
   }
-  if (!res.ok) throw new Error(`YouTube ${path} -> ${res.status}`);
   return (await res.json()) as T;
 }
 

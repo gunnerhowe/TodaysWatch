@@ -38,6 +38,7 @@ interface MultiResult {
   first_air_date?: string;
   poster_path?: string | null;
   popularity?: number;
+  overview?: string;
 }
 
 const yearOf = (d?: string | null) => (d && /^\d{4}/.test(d) ? Number(d.slice(0, 4)) : null);
@@ -45,7 +46,7 @@ const yearOf = (d?: string | null) => (d && /^\d{4}/.test(d) ? Number(d.slice(0,
 /** F1: multi-search, people hidden, up to 8 results. Cached 1 hour. */
 export async function searchTitles(q: string): Promise<SearchResult[]> {
   const query = q.trim().toLowerCase();
-  const { value } = await cached(`tmdb:search:${query}`, HOUR, async () => {
+  const { value } = await cached(`tmdb:search:v2:${query}`, HOUR, async () => {
     const data = await tmdb<{ results: MultiResult[] }>("/search/multi", { query, include_adult: "false", language: "en-US", page: 1 });
     return data.results
       .filter((r) => r.media_type === "movie" || r.media_type === "tv")
@@ -56,6 +57,7 @@ export async function searchTitles(q: string): Promise<SearchResult[]> {
         name: (r.title ?? r.name ?? "").trim(),
         year: yearOf(r.release_date ?? r.first_air_date),
         posterPath: r.poster_path ?? null,
+        overview: r.overview ? r.overview.slice(0, 400) : null,
       }));
   });
   return value;

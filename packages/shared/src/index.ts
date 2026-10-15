@@ -14,6 +14,8 @@ export const SearchResultZ = z.object({
   name: z.string(),
   year: z.number().int().nullable(),
   posterPath: z.string().nullable(),
+  /** short plot summary, so people can confirm it's the right title */
+  overview: z.string().nullable().optional(),
 });
 export type SearchResult = z.infer<typeof SearchResultZ>;
 

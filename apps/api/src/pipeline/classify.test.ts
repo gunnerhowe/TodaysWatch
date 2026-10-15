@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inParallel, needsReview } from "./classify.ts";
+import { inParallel, isSystemicModelFailure, needsReview } from "./classify.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { currentLlmTag } from "./version.ts";
 
@@ -41,5 +41,19 @@ describe("inParallel", () => {
     });
     expect(peak).toBe(4);
     expect(seen.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+});
+
+describe("isSystemicModelFailure", () => {
+  it("stops the run for credit, auth, outage and cap failures", () => {
+    expect(isSystemicModelFailure(Object.assign(new Error("Payment required"), { status: 402 }))).toBe(true);
+    expect(isSystemicModelFailure(Object.assign(new Error("nope"), { status: 401 }))).toBe(true);
+    expect(isSystemicModelFailure(Object.assign(new Error("Bad gateway"), { status: 502 }))).toBe(true);
+    expect(isSystemicModelFailure(new Error("Insufficient balance on account"))).toBe(true);
+    expect(isSystemicModelFailure(new Error("fetch failed"))).toBe(true);
+  });
+  it("treats malformed replies as retryable, not systemic", () => {
+    expect(isSystemicModelFailure(new Error("expected 40 labels, got 39"))).toBe(false);
+    expect(isSystemicModelFailure(new SyntaxError("Unexpected token } in JSON"))).toBe(false);
   });
 });

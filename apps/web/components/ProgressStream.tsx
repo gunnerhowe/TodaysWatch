@@ -38,7 +38,7 @@ export function ProgressStream({ titleId, initial, updating = false }: { titleId
           if (e.stage === "ready" || e.stage === "error") {
             done = true;
             es?.close();
-            if (e.stage === "ready") router.refresh();
+            router.refresh(); // show the new score, or why scoring stopped
           }
         });
         es.onerror = () => {
@@ -68,7 +68,7 @@ export function ProgressStream({ titleId, initial, updating = false }: { titleId
     <div className="surface rounded-xl p-4" role="status" aria-live="polite">
       <p className="flex items-center gap-2 text-sm font-medium">
         <span className="pulse-dot inline-block h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden />
-        {p?.stage === "error" ? "Scoring hit a problem. We'll try again later." : msg}
+        {p?.stage === "error" ? p.message || "Scoring hit a problem. It will retry later." : msg}
       </p>
       <p className="mt-1 text-xs text-faint">{failed ? "Connection dropped. Reconnecting…" : updating ? "The score above stays until the update is done, usually a few minutes. This page refreshes itself." : "Usually a few minutes. You can leave and come back; the score will be waiting."}</p>
     </div>

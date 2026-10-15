@@ -5,7 +5,8 @@ import { enqueuePrescore, jobStatus } from "../jobs/index.ts";
 import { requireAdmin } from "../lib/auth.ts";
 import { diagnostics } from "../lib/diag.ts";
 import { remaining, usageSummary } from "../lib/ledger.ts";
-import { agentModel, classifierModel, lastModelCheck, llmConfigured } from "../llm/index.ts";
+import { agentModel, classifierModel, getLastModelError, lastModelCheck, llmConfigured } from "../llm/index.ts";
+import { scoringPause } from "../pipeline/pause.ts";
 import { qlooReady } from "../qloo/bridge.ts";
 
 export async function systemRoutes(app: FastifyInstance) {
@@ -32,6 +33,8 @@ export async function systemRoutes(app: FastifyInstance) {
       youtubeUnitsLeft,
       sources: sourcesEnabled(),
       jobs: await jobStatus().catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+      scoringPaused: scoringPause(),
+      lastModelError: getLastModelError(),
       version: VERSION,
       process: await diagnostics(),
     };

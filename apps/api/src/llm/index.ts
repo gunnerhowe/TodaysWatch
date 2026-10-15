@@ -98,6 +98,10 @@ async function callWithRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The most recent failed model call, for /health (no keys or prompts, just status and message). */
+let lastModelError: { at: string; status: number | null; message: string; model: string; purpose: string } | null = null;
+export const getLastModelError = () => lastModelError;
+
 let client: OpenAI | null = null;
 function nebius(): OpenAI {
   if (!env.NEBIUS_API_KEY) throw new Error("NEBIUS_API_KEY is not set");
@@ -123,7 +127,19 @@ export async function chat(o: ChatOptions): Promise<ChatResult> {
   // Refuse before spending if today's cap is already used up. Never silently goes over.
   await ensureBudget(ledger, 0.0001, !o.prescore);
   const started = Date.now();
-  const res = await callWithRateLimitRetry(() => slots.run(() => (env.LLM_PROVIDER === "anthropic" ? anthropicChat(o) : nebiusChat(o))));
+  let res: Awaited<ReturnType<typeof nebiusChat>>;
+  try {
+    res = await callWithRateLimitRetry(() => slots.run(() => (env.LLM_PROVIDER === "anthropic" ? anthropicChat(o) : nebiusChat(o))));
+  } catch (e) {
+    lastModelError = {
+      at: new Date().toISOString(),
+      status: (e as { status?: number } | null)?.status ?? null,
+      message: (e instanceof Error ? e.message : String(e)).slice(0, 240),
+      model: o.model ?? agentModel(),
+      purpose: o.purpose,
+    };
+    throw e;
+  }
   const cost = costUsd(res.model, res.usage.inputTokens, res.usage.outputTokens);
   await record(ledger, cost);
   return { ...res, costUsd: cost, latencyMs: Date.now() - started };

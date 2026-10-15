@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { CapExceededError, remaining } from "../lib/ledger.ts";
+import { ModelUnavailableError } from "../pipeline/classify.ts";
 import { recomputeBaselines } from "../pipeline/baselines.ts";
 import { scoreTitle } from "../pipeline/score.ts";
 import * as tmdb from "../sources/tmdb.ts";
@@ -78,8 +79,8 @@ export async function prescoreBatch(log: (m: string) => void = () => {}) {
       scored++;
       log(`prescored ${t.name} (${t.year}): ${r.counted} counted, ${r.state}`);
     } catch (e) {
-      if (e instanceof CapExceededError) {
-        stoppedBy = e.message;
+      if (e instanceof CapExceededError || e instanceof ModelUnavailableError) {
+        stoppedBy = e.message; // every further title would fail the same way after spending quota
         break;
       }
       log(`prescore failed for ${t.name}: ${e instanceof Error ? e.message : e}`);

@@ -13,7 +13,7 @@ import { api, ApiError, apiSafe } from "@/lib/server";
 interface TitleResp {
   title: Title;
   rating: Rating | null;
-  scoring: { queued: boolean; limited: boolean; progress: ProgressEvent | null; released: boolean };
+  scoring: { queued: boolean; limited: boolean; progress: ProgressEvent | null; released: boolean; paused?: string | null };
 }
 
 type Params = { type: string; tmdbId: string; slug: string };
@@ -70,7 +70,12 @@ export default async function TitlePage({ params }: { params: Promise<Params> })
         <TrustLine score={s} />
         <GenreLine score={s} />
         {s.state === "INSUFFICIENT" && <p className="text-sm text-dim">Fewer than 50 people who watched it have said what they thought, so we won&apos;t guess.</p>}
-        {pending && scoring.released && <ProgressStream titleId={title.id} initial={scoring.progress} updating={scored || s.countedN > 0} />}
+        {scoring.paused && (
+          <p className="surface rounded-xl p-4 text-sm text-dim" role="status">
+            Scoring is paused right now ({scoring.paused}). {scored ? "The score above is from the last successful run." : "This title will be scored once it resumes."} It retries automatically.
+          </p>
+        )}
+        {pending && scoring.released && !scoring.paused && <ProgressStream titleId={title.id} initial={scoring.progress} updating={scored || s.countedN > 0} />}
         {!scoring.released && <p className="text-sm text-dim">Not out yet. We only count opinions from after release.</p>}
         {scoring.limited && <p className="text-sm text-dim">We&apos;re scoring a lot of new titles for you right now. This one will start shortly.</p>}
       </section>

@@ -10,7 +10,8 @@ import { SourceDisabledError, type RawItem, type TitleRef } from "../sources/typ
 import * as youtube from "../sources/youtube.ts";
 import { typeToKind } from "../titles.ts";
 import { loadBaselines, scheduleBaselineRefresh } from "./baselines.ts";
-import { classifyAll, type ToClassify } from "./classify.ts";
+import { classifyAll, ModelUnavailableError, type ToClassify } from "./classify.ts";
+import { pauseScoring, scoringPause } from "./pause.ts";
 import { blueskyRelevant, cleanItems, interleaveBySource, mentionsTheVideo } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
@@ -106,6 +107,12 @@ export interface ScoreRunResult {
 export async function scoreTitle(titleId: string, opts: { live: boolean }): Promise<ScoreRunResult> {
   const p = new ProgressLine(titleId);
   const t = await prisma.title.findUniqueOrThrow({ where: { id: titleId } });
+  const paused = scoringPause();
+  if (paused) {
+    // don't spend YouTube quota collecting comments we can't label
+    p.emit("error", `Scoring is paused: ${paused.reason}`);
+    throw new ModelUnavailableError(paused.reason);
+  }
   await prisma.title.update({ where: { id: t.id }, data: { scoreState: t.scoreState === "NONE" ? "PENDING" : t.scoreState } });
   p.emit("resolving", "Looking for discussion");
 
@@ -168,7 +175,7 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
       onReview: (done, total) => p.emit("classifying", `Double-checking ${done} of ${total} tricky ones with a second model`),
     });
     notes.push(
-      `classifier: ${outcome.labels.length} labelled, ${outcome.reviewed} changed on second opinion${outcome.usedFallback ? ` (backup classifier used: ${outcome.fallbackReason})` : ""}`,
+      `classifier: ${outcome.labels.length} labelled, ${outcome.reviewed} changed on second opinion${outcome.skipped ? `, ${outcome.skipped} skipped (malformed replies, retried next refresh)` : ""}${outcome.usedFallback ? ` (backup classifier used: ${outcome.fallbackReason})` : ""}`,
     );
     await prisma.$transaction(
       outcome.labels.map((l) =>
@@ -187,8 +194,13 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
     p.emit("ready", "Score ready", notes);
     return { titleId: t.id, collected: raw.length, cleaned: clean.length, classified: outcome.labels.length, counted: result.counted, state: result.state, notes };
   } catch (e) {
+    // put the title back the way it was; an earlier score stays visible
     await prisma.title.update({ where: { id: t.id }, data: { scoreState: t.scoreState === "PENDING" ? "NONE" : t.scoreState } }).catch(() => {});
-    p.emit("error", e instanceof Error ? e.message : "Scoring failed");
+    if (e instanceof ModelUnavailableError) {
+      pauseScoring(e.message);
+      p.emit("error", `Scoring is paused: ${e.message}. It will retry automatically.`);
+    } else p.emit("error", "Scoring hit a problem. It will retry later.");
+    console.warn(`[score] ${t.name} (${t.year}) failed:`, e instanceof Error ? e.message : e);
     throw e;
   }
 }

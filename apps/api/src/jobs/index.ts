@@ -3,6 +3,7 @@ import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { purgeExpiredCache } from "../lib/cache.ts";
 import { recomputeBaselines } from "../pipeline/baselines.ts";
+import { scoringPause } from "../pipeline/pause.ts";
 import { isActive, isRunning, markQueued, runningNow } from "../pipeline/progress.ts";
 import { scoreTitle } from "../pipeline/score.ts";
 import { prescoreBatch } from "./prescore.ts";
@@ -107,6 +108,7 @@ export async function jobStatus() {
 
 /** Queue a title for scoring (deduplicated per title). Returns false if jobs are off. */
 export async function enqueueScore(titleId: string, live: boolean): Promise<boolean> {
+  if (scoringPause()) return false; // the model is unavailable; the page explains why
   if (isActive(titleId)) return true; // already queued or running in this process
   markQueued(titleId);
   if (!boss) {

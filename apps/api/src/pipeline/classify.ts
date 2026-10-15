@@ -150,11 +150,35 @@ export interface ClassifyOutcome {
   fallbackReason: string | null;
   /** labels the reviewer model changed */
   reviewed: number;
+  /** items left unlabelled this run because their batch kept failing; retried next refresh */
+  skipped: number;
+}
+
+/** Nemotron can't label right now (spend cap, credit, key, outage). The run stops; nothing is guessed. */
+export class ModelUnavailableError extends Error {}
+
+/** Failures that won't fix themselves within this run: retrying or splitting batches can't help. */
+export function isSystemicModelFailure(e: unknown): boolean {
+  if (e instanceof CapExceededError) return true;
+  const status = (e as { status?: number } | null)?.status;
+  if (status === 401 || status === 402 || status === 403 || (status !== undefined && status >= 500)) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /ECONN|ETIMEDOUT|fetch failed|timeout|insufficient|balance|quota|credit|billing|payment|unauthori[sz]ed|forbidden|not configured/i.test(msg);
+}
+
+function describeFailure(e: unknown): string {
+  if (e instanceof CapExceededError) return "today's model spending cap was reached";
+  const status = (e as { status?: number } | null)?.status;
+  const msg = (e instanceof Error ? e.message : String(e)).slice(0, 160);
+  return status ? `the model service returned ${status}: ${msg}` : `the model service failed: ${msg}`;
 }
 
 /**
- * 40 items per call, temperature 0, zod-validated. On invalid JSON retry once, then send that
- * batch to RoBERTa. If the spend cap is hit or Nebius is down, the rest of the run uses RoBERTa.
+ * 40 items per call, temperature 0, zod-validated, a few batches at a time. A malformed reply is
+ * retried, then retried as two halves; if a batch still fails, its items are left unlabelled
+ * (not counted this run, retried next refresh). Rate limits wait and retry. A systemic failure
+ * throws ModelUnavailableError. The RoBERTa fallback only runs when CLASSIFIER=roberta or
+ * ALLOW_ROBERTA_FALLBACK=true: on a small host its memory use crashes the API.
  */
 export async function classifyAll(
   title: { name: string; year: number | null; type: string },
@@ -162,74 +186,74 @@ export async function classifyAll(
   opts: { prescore: boolean; onProgress?: (done: number) => void; onReview?: (done: number, total: number) => void },
 ): Promise<ClassifyOutcome> {
   const labels: Label[] = [];
+  if (env.CLASSIFIER === "roberta") {
+    for (const start of batchStarts(items.length)) {
+      labels.push(...(await robertaClassify(items.slice(start, start + BATCH))));
+      opts.onProgress?.(labels.length);
+    }
+    return { labels, usedFallback: true, fallbackReason: "CLASSIFIER=roberta", reviewed: 0, skipped: 0 };
+  }
+  if (!llmConfigured()) throw new ModelUnavailableError("the language model is not configured");
+
+  let systemic: unknown = null;
   let usedFallback = false;
   let fallbackReason: string | null = null;
-  let forceFallback = env.CLASSIFIER === "roberta" || !llmConfigured();
-  if (forceFallback) {
-    usedFallback = true;
-    fallbackReason = env.CLASSIFIER === "roberta" ? "CLASSIFIER=roberta" : "LLM not configured";
-  }
+  let skipped = 0;
 
-  // Batches run a few at a time: one title went from ~15 sequential model calls to ~4 rounds.
-  await inParallel(batchStarts(items.length), PARALLEL_LABEL_BATCHES, async (start) => {
-    const batch = items.slice(start, start + BATCH);
-    let got: Label[] | null = null;
-    if (!forceFallback) {
-      for (let attempt = 0; attempt < 2 && !got; attempt++) {
-        try {
-          got = await llmBatch(title, batch, opts.prescore);
-        } catch (e) {
-          if (e instanceof CapExceededError) {
-            forceFallback = true;
-            fallbackReason = "LLM spend cap reached";
-            break;
-          }
-          const msg = e instanceof Error ? e.message : String(e);
-          // still rate-limited after the llm module's own backoff: give Nebius a breather and
-          // retry this batch rather than handing it to the backup model
-          if (isRateLimit(e)) {
-            await new Promise((r) => setTimeout(r, 30_000));
-            continue;
-          }
-          if (/ECONN|ETIMEDOUT|fetch failed|5\d\d|timeout/i.test(msg)) {
-            forceFallback = true;
-            fallbackReason = "Nebius unavailable";
-            break;
-          }
-          // validation failure: retry once, then this batch goes to the fallback
+  const attempt = async (batch: ToClassify[]): Promise<Label[] | null> => {
+    for (let i = 0; i < 2 && !systemic; i++) {
+      try {
+        return await llmBatch(title, batch, opts.prescore);
+      } catch (e) {
+        if (isRateLimit(e)) {
+          // still rate-limited after the llm module's own backoff: pause, then try again
+          await new Promise((r) => setTimeout(r, 30_000));
+          i--;
+          continue;
         }
+        if (isSystemicModelFailure(e)) {
+          systemic ??= e;
+          return null;
+        }
+        // malformed reply: retry once
       }
     }
-    if (!got && !forceFallback && batch.length > 1) {
-      // A failed batch of 40 usually means one malformed answer; two smaller batches almost
-      // always succeed, so try that before handing anything to the backup model.
+    return null;
+  };
+
+  await inParallel(batchStarts(items.length), PARALLEL_LABEL_BATCHES, async (start) => {
+    if (systemic) return;
+    const batch = items.slice(start, start + BATCH);
+    let got = await attempt(batch);
+    if (!got && !systemic && batch.length > 1) {
+      // a failed batch of 40 is usually one malformed answer; two smaller batches usually work
       const mid = Math.ceil(batch.length / 2);
       got = [];
       for (const half of [batch.slice(0, mid), batch.slice(mid)]) {
-        let part: Label[] | null = null;
-        try {
-          part = await llmBatch(title, half, opts.prescore);
-        } catch {
-          part = null;
-        }
-        if (!part) {
+        const part = await attempt(half);
+        if (part) got.push(...part);
+        else if (!systemic && env.ALLOW_ROBERTA_FALLBACK) {
           usedFallback = true;
           fallbackReason ??= "a batch failed validation even when split";
-          part = await robertaClassify(half);
-        }
-        got.push(...part);
+          got.push(...(await robertaClassify(half)));
+        } else skipped += half.length;
       }
-    }
-    if (!got) {
-      usedFallback = true;
-      fallbackReason ??= "batch failed validation twice";
-      got = await robertaClassify(batch);
-    }
-    labels.push(...got);
+    } else if (!got && !systemic) skipped += batch.length;
+    if (got) labels.push(...got);
     opts.onProgress?.(labels.length);
   });
+
+  if (systemic) {
+    if (!env.ALLOW_ROBERTA_FALLBACK) throw new ModelUnavailableError(describeFailure(systemic));
+    // explicitly allowed: label whatever is left with RoBERTa
+    const done = new Set(labels.map((l) => l.idx));
+    const rest = items.filter((it) => !done.has(it.idx));
+    for (const start of batchStarts(rest.length)) labels.push(...(await robertaClassify(rest.slice(start, start + BATCH))));
+    usedFallback = true;
+    fallbackReason = describeFailure(systemic);
+  }
   const reviewed = await reviewHardCases(title, items, labels, opts.prescore, opts.onReview);
-  return { labels, usedFallback, fallbackReason, reviewed };
+  return { labels, usedFallback, fallbackReason, reviewed, skipped };
 }
 
 /** A label worth a second opinion: any non-positive verdict, or one Nano wasn't sure of. */

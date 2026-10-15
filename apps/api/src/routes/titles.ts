@@ -5,6 +5,7 @@ import { trendingTitles } from "../agent/trending.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
 import { existingProfile, requireCaller, verifyStreamToken } from "../lib/auth.ts";
+import { scoringPause } from "../pipeline/pause.ts";
 import { isActive, lastProgress, onProgress } from "../pipeline/progress.ts";
 import { quoteExcerpt } from "../pipeline/score.ts";
 import { callQloo } from "../qloo/bridge.ts";
@@ -55,7 +56,13 @@ export async function titleRoutes(app: FastifyInstance) {
     return {
       title: await titleDto(t),
       rating: rating ? { titleId: t.id, value: rating.value, seen: rating.seen, wantToWatch: rating.wantToWatch } : null,
-      scoring: { queued: queued || isActive(t.id), limited, progress: lastProgress(t.id) ?? null, released: !(t.releaseDate && t.releaseDate > new Date()) },
+      scoring: {
+        queued: queued || isActive(t.id),
+        limited,
+        progress: lastProgress(t.id) ?? null,
+        released: !(t.releaseDate && t.releaseDate > new Date()),
+        paused: scoringPause()?.reason ?? null,
+      },
     };
   });
 

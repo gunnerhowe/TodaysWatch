@@ -5,7 +5,9 @@ import { trendingTitles } from "../agent/trending.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
 import { existingProfile, requireCaller, verifyStreamToken } from "../lib/auth.ts";
-import { scoringPause } from "../pipeline/pause.ts";
+import { remaining } from "../lib/ledger.ts";
+import { nextBudgetReset, pauseScoring, scoringPause } from "../pipeline/pause.ts";
+import { llmLabelling } from "../pipeline/version.ts";
 import { isActive, lastProgress, onProgress } from "../pipeline/progress.ts";
 import { quoteExcerpt } from "../pipeline/score.ts";
 import { callQloo } from "../qloo/bridge.ts";
@@ -43,7 +45,11 @@ export async function titleRoutes(app: FastifyInstance) {
     }
     let queued = false;
     let limited = false;
-    if (isStale(t) && !(t.releaseDate && t.releaseDate > new Date())) {
+    // Out of model budget for today: pause up front rather than queuing a run that will fail.
+    if (isStale(t) && !scoringPause() && llmLabelling() && (await remaining("llm_usd", true).catch(() => 1)) <= 0) {
+      pauseScoring("today's model spending cap was reached", nextBudgetReset().getTime() - Date.now());
+    }
+    if (isStale(t) && !scoringPause() && !(t.releaseDate && t.releaseDate > new Date())) {
       // New-title scoring is limited per IP; refreshes of already-scored titles are not.
       const isNew = t.scoreState === "NONE";
       if (!isNew || scoringLimiter.take(req.ip)) {
@@ -61,7 +67,7 @@ export async function titleRoutes(app: FastifyInstance) {
         limited,
         progress: lastProgress(t.id) ?? null,
         released: !(t.releaseDate && t.releaseDate > new Date()),
-        paused: scoringPause()?.reason ?? null,
+        paused: scoringPause(),
       },
     };
   });

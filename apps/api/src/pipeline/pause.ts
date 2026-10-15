@@ -22,3 +22,8 @@ export function scoringPause(): { until: string; reason: string } | null {
 export function clearScoringPause() {
   pause = null;
 }
+
+/** Next reset of the daily model budget (one minute past midnight UTC). */
+export function nextBudgetReset(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 1));
+}

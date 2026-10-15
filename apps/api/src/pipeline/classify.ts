@@ -155,7 +155,18 @@ export interface ClassifyOutcome {
 }
 
 /** Nemotron can't label right now (spend cap, credit, key, outage). The run stops; nothing is guessed. */
-export class ModelUnavailableError extends Error {}
+export class ModelUnavailableError extends Error {
+  /** when scoring can usefully try again (the daily cap resets at midnight UTC) */
+  constructor(message: string, public resumeAt: Date | null = null) {
+    super(message);
+  }
+}
+
+function resumeAtFor(e: unknown): Date | null {
+  if (!(e instanceof CapExceededError)) return null;
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 1));
+}
 
 /** Failures that won't fix themselves within this run: retrying or splitting batches can't help. */
 export function isSystemicModelFailure(e: unknown): boolean {
@@ -244,7 +255,7 @@ export async function classifyAll(
   });
 
   if (systemic) {
-    if (!env.ALLOW_ROBERTA_FALLBACK) throw new ModelUnavailableError(describeFailure(systemic));
+    if (!env.ALLOW_ROBERTA_FALLBACK) throw new ModelUnavailableError(describeFailure(systemic), resumeAtFor(systemic));
     // explicitly allowed: label whatever is left with RoBERTa
     const done = new Set(labels.map((l) => l.idx));
     const rest = items.filter((it) => !done.has(it.idx));

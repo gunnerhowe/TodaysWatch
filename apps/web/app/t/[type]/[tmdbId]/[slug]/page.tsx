@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import type { ProgressEvent, Providers, Quote, Rating, Title, TitleChip } from "@tp/shared";
+import { LocalTime } from "@/components/LocalTime";
 import { Poster } from "@/components/Poster";
 import { ProgressStream } from "@/components/ProgressStream";
 import { GenreLine, ScoreBar, ScoreHeadline, TrustLine } from "@/components/Score";
@@ -13,7 +14,7 @@ import { api, ApiError, apiSafe } from "@/lib/server";
 interface TitleResp {
   title: Title;
   rating: Rating | null;
-  scoring: { queued: boolean; limited: boolean; progress: ProgressEvent | null; released: boolean; paused?: string | null };
+  scoring: { queued: boolean; limited: boolean; progress: ProgressEvent | null; released: boolean; paused?: { reason: string; until: string } | null };
 }
 
 type Params = { type: string; tmdbId: string; slug: string };
@@ -72,7 +73,7 @@ export default async function TitlePage({ params }: { params: Promise<Params> })
         {s.state === "INSUFFICIENT" && <p className="text-sm text-dim">Fewer than 50 people who watched it have said what they thought, so we won&apos;t guess.</p>}
         {scoring.paused && (
           <p className="surface rounded-xl p-4 text-sm text-dim" role="status">
-            Scoring is paused right now ({scoring.paused}). {scored ? "The score above is from the last successful run." : "This title will be scored once it resumes."} It retries automatically.
+            Scoring is paused ({scoring.paused.reason}) and resumes around <LocalTime iso={scoring.paused.until} />. {scored ? "The score above is from the last successful run." : "This title will be scored once it resumes."}
           </p>
         )}
         {pending && scoring.released && !scoring.paused && <ProgressStream titleId={title.id} initial={scoring.progress} updating={scored || s.countedN > 0} />}

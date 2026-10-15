@@ -2,6 +2,7 @@ import type { Mention, Title } from "@prisma/client";
 import { computeScore, genrePercentiles, isCounted, nextRefreshAt, scoreFromCounts } from "@tp/scoring";
 import { env, sourcesEnabled } from "../config.ts";
 import { prisma } from "../db.ts";
+import { CapExceededError, ensureBudget } from "../lib/ledger.ts";
 import * as bluesky from "../sources/bluesky.ts";
 import * as reddit from "../sources/reddit.ts";
 import * as tmdb from "../sources/tmdb.ts";
@@ -113,6 +114,19 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
     p.emit("error", `Scoring is paused: ${paused.reason}`);
     throw new ModelUnavailableError(paused.reason);
   }
+  // Check the model budget before collecting, too: the pause is in memory and a restart clears it.
+  if (llmLabelling()) {
+    try {
+      await ensureBudget(opts.live ? "llm_usd" : "llm_prescore_usd", 0.01, opts.live);
+    } catch (e) {
+      if (!(e instanceof CapExceededError)) throw e;
+      const d = new Date();
+      const resumeAt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 1));
+      pauseScoring("today's model spending cap was reached", resumeAt.getTime() - Date.now());
+      p.emit("error", "Scoring is paused: today's model spending cap was reached.");
+      throw new ModelUnavailableError("today's model spending cap was reached", resumeAt);
+    }
+  }
   await prisma.title.update({ where: { id: t.id }, data: { scoreState: t.scoreState === "NONE" ? "PENDING" : t.scoreState } });
   p.emit("resolving", "Looking for discussion");
 
@@ -197,8 +211,8 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
     // put the title back the way it was; an earlier score stays visible
     await prisma.title.update({ where: { id: t.id }, data: { scoreState: t.scoreState === "PENDING" ? "NONE" : t.scoreState } }).catch(() => {});
     if (e instanceof ModelUnavailableError) {
-      pauseScoring(e.message);
-      p.emit("error", `Scoring is paused: ${e.message}. It will retry automatically.`);
+      pauseScoring(e.message, e.resumeAt ? e.resumeAt.getTime() - Date.now() : undefined);
+      p.emit("error", `Scoring is paused: ${e.message}.`);
     } else p.emit("error", "Scoring hit a problem. It will retry later.");
     console.warn(`[score] ${t.name} (${t.year}) failed:`, e instanceof Error ? e.message : e);
     throw e;

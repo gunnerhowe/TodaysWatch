@@ -4,7 +4,7 @@ import { dbHealthy } from "../db.ts";
 import { enqueuePrescore, jobStatus } from "../jobs/index.ts";
 import { requireAdmin } from "../lib/auth.ts";
 import { diagnostics } from "../lib/diag.ts";
-import { remaining, usageSummary } from "../lib/ledger.ts";
+import { capFor, remaining, usageSummary, usedToday } from "../lib/ledger.ts";
 import { agentModel, classifierModel, getLastModelError, lastModelCheck, llmConfigured } from "../llm/index.ts";
 import { scoringPause } from "../pipeline/pause.ts";
 import { qlooReady } from "../qloo/bridge.ts";
@@ -34,6 +34,15 @@ export async function systemRoutes(app: FastifyInstance) {
       sources: sourcesEnabled(),
       jobs: await jobStatus().catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
       scoringPaused: scoringPause(),
+      // estimated from token counts and the price table; Nebius's dashboard is the source of truth
+      spendTodayUsd: db
+        ? {
+            live: Math.round((await usedToday("llm_usd").catch(() => 0)) * 1000) / 1000,
+            liveCap: capFor("llm_usd", true),
+            nightly: Math.round((await usedToday("llm_prescore_usd").catch(() => 0)) * 1000) / 1000,
+            nightlyCap: capFor("llm_prescore_usd", false),
+          }
+        : null,
       lastModelError: getLastModelError(),
       version: VERSION,
       process: await diagnostics(),

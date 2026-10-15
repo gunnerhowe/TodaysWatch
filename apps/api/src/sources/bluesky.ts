@@ -14,7 +14,8 @@ async function getAgent(): Promise<AtpAgent> {
   if (!env.BLUESKY_HANDLE || !env.BLUESKY_APP_PASSWORD) throw new SourceDisabledError("Bluesky is not configured");
   if (agent && Date.now() - loginAt < 60 * 60_000) return agent;
   const a = new AtpAgent({ service: "https://bsky.social" });
-  await a.login({ identifier: env.BLUESKY_HANDLE, password: env.BLUESKY_APP_PASSWORD });
+  // "@you.bsky.social" would be read as an email address; the API wants the bare handle.
+  await a.login({ identifier: env.BLUESKY_HANDLE.replace(/^@/, ""), password: env.BLUESKY_APP_PASSWORD });
   agent = a;
   loginAt = Date.now();
   return a;

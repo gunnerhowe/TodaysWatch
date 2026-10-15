@@ -2,7 +2,14 @@ import { z } from "zod";
 
 const bool = (d: boolean) => z.enum(["true", "false", "1", "0"]).optional().transform((v) => (v === undefined ? d : v === "true" || v === "1"));
 const num = (d: number) => z.coerce.number().default(d);
-const opt = z.string().optional().transform((v) => (v && v.trim() ? v.trim() : undefined));
+/** Trimmed, with one layer of wrapping quotes removed (a common paste mistake in host dashboards). */
+const opt = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const t = v?.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+    return t ? t : undefined;
+  });
 
 const EnvZ = z.object({
   NODE_ENV: z.string().default("development"),

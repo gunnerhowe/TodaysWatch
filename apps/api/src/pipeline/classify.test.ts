@@ -15,10 +15,14 @@ describe("needsReview", () => {
     expect(needsReview({ stance: "NONE", confidence: 0.5, classifier: tag })).toBe(true);
     expect(needsReview({ stance: "LIKED", confidence: 0.9, classifier: tag })).toBe(false);
   });
+  it("reviews confident likes that talk about the video or creator", () => {
+    expect(needsReview({ stance: "LIKED", confidence: 0.95, classifier: tag }, "best video I've ever watched, great editing")).toBe(true);
+    expect(needsReview({ stance: "LIKED", confidence: 0.95, classifier: tag }, "Dwight is the best character ever written")).toBe(false);
+  });
   it("never reviews the backup classifier's labels", () => {
     expect(needsReview({ stance: "DISLIKED", confidence: 0.9, classifier: ROBERTA_TAG })).toBe(false);
   });
   it("the pipeline tag names both models and the prompt version", () => {
-    expect(tag).toMatch(/\+review:.+@cls-v3$/);
+    expect(tag).toMatch(/\+review:.+@cls-v\d+$/);
   });
 });

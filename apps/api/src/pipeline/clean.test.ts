@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawItem } from "../sources/types.ts";
-import { blueskyRelevant, cleanItems, excerptOf, interleaveBySource, isLinkOnly, jaccard, looksEnglish, wordCount } from "./clean.ts";
+import { blueskyRelevant, cleanItems, excerptOf, interleaveBySource, isLinkOnly, mentionsTheVideo, jaccard, looksEnglish, wordCount } from "./clean.ts";
 
 let n = 0;
 const item = (text: string, over: Partial<RawItem> = {}): RawItem => ({
@@ -137,5 +137,16 @@ describe("blueskyRelevant", () => {
     expect(blueskyRelevant("Smile at strangers today, it helps", smile)).toBe(false);
     expect(blueskyRelevant("honestly Smile scared me more than anything this year", smile)).toBe(true);
     expect(blueskyRelevant("Smile (2022) was terrifying", smile)).toBe(true);
+  });
+});
+
+describe("mentionsTheVideo", () => {
+  it("flags comments about the video or creator", () => {
+    for (const t of ["This is by far one of the best videos I've ever watched", "great video, subscribed", "you explained it perfectly", "the editing on this video is insane"])
+      expect(mentionsTheVideo(t)).toBe(true);
+  });
+  it("leaves comments about the show alone", () => {
+    for (const t of ["The show died when the main character Devon was fired", "Dwight is the best character", "I rewatch it every year"])
+      expect(mentionsTheVideo(t)).toBe(false);
   });
 });

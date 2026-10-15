@@ -11,7 +11,7 @@ import * as youtube from "../sources/youtube.ts";
 import { typeToKind } from "../titles.ts";
 import { loadBaselines } from "./baselines.ts";
 import { classifyAll, type ToClassify } from "./classify.ts";
-import { blueskyRelevant, cleanItems, interleaveBySource } from "./clean.ts";
+import { blueskyRelevant, cleanItems, interleaveBySource, mentionsTheVideo } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { summarize } from "./summary.ts";
@@ -19,6 +19,7 @@ import { BASIC_SUFFIX, currentLlmTag, expectedVersion, llmLabelling } from "./ve
 
 const YT_RETENTION_MS = 30 * 86_400_000;
 const QUOTE_MAX = 200;
+const QUOTE_MIN_CONFIDENCE = 0.8;
 
 export { currentLlmTag };
 
@@ -242,7 +243,9 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
 async function chooseQuotes(titleId: string, counted: Mention[]) {
   const pick = (stance: "LIKED" | "DISLIKED") =>
     counted
-      .filter((m) => m.stance === stance && m.excerpt && m.excerpt.length >= 30)
+      // Quotes are what visitors read, so hold them to a higher bar than counting:
+      // confident labels only, and never a comment about the YouTube video itself.
+      .filter((m) => m.stance === stance && m.excerpt && m.excerpt.length >= 30 && (m.confidence ?? 0) >= QUOTE_MIN_CONFIDENCE && !mentionsTheVideo(m.excerpt))
       .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || (b.likes ?? 0) - (a.likes ?? 0))
       .slice(0, 3)
       .map((m) => m.id);

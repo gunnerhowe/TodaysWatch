@@ -2,6 +2,7 @@ import { z } from "zod";
 import { env } from "../config.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { chat, classifierModel, llmConfigured, parseJsonLoose } from "../llm/index.ts";
+import { mentionsTheVideo } from "./clean.ts";
 import { robertaClassify } from "./roberta.ts";
 import { currentLlmTag, reviewModel } from "./version.ts";
 
@@ -68,6 +69,14 @@ Examples (title: "Example Film"):
 18. "When she said that line my jaw dropped, I had to pause it" -> true, true, liked, 0.75
 19. "I can't believe they ended it like that, I screamed" -> true, true, mixed, 0.5
 
+20. "This is one of the best videos I've ever watched, the editing is amazing" -> false, false, none, 0.9
+21. "Great breakdown, you explained it perfectly" -> false, false, none, 0.9
+22. "The show died when the main character *Kevin's chili* was spilled" -> true, true, liked, 0.6
+
+Many items are comments under YouTube review or reaction videos. Praise or criticism of the
+VIDEO, the editing, the channel or the creator is NOT about the title: about_title false.
+Fans often joke by treating a minor character or moment as the main event ("the show died
+when..." about a background character); that is affection, not a dislike.
 When a title is made of everyday words, check the item is about the movie or show and not
 the ordinary thing (an actual office, a smile, a bear). Strong reactions ("my jaw dropped",
 "I screamed", "I'm not okay") are usually excitement, not dislike; read them in context.
@@ -184,9 +193,10 @@ export async function classifyAll(
 }
 
 /** A label worth a second opinion: any non-positive verdict, or one Nano wasn't sure of. */
-export function needsReview(l: Pick<Label, "stance" | "confidence" | "classifier">): boolean {
+export function needsReview(l: Pick<Label, "stance" | "confidence" | "classifier">, text = ""): boolean {
   if (!l.classifier.startsWith(classifierModel())) return false; // never the RoBERTa fallback
-  return l.stance === "DISLIKED" || l.stance === "MIXED" || l.confidence < REVIEW_BELOW;
+  // a confident "liked" can still be praise for the YouTube video rather than the title
+  return l.stance === "DISLIKED" || l.stance === "MIXED" || l.confidence < REVIEW_BELOW || mentionsTheVideo(text);
 }
 
 const REVIEW_BELOW = 0.75;
@@ -206,7 +216,7 @@ async function reviewHardCases(
   const model = reviewModel();
   if (!model) return 0;
   const byIdx = new Map(items.map((it) => [it.idx, it]));
-  const hard = labels.filter(needsReview);
+  const hard = labels.filter((l) => needsReview(l, byIdx.get(l.idx)?.text));
   let changed = 0;
   for (let start = 0; start < hard.length; start += BATCH) {
     const chunk = hard.slice(start, start + BATCH);

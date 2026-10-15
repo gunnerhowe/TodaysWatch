@@ -261,3 +261,10 @@ export function blueskyRelevant(text: string, title: { name: string; year: numbe
   if (/[A-Z]/.test(name) && new RegExp(`[a-z0-9,;:]\\s+${n}\\b`).test(text)) return true;
   return false;
 }
+
+/** Comments that talk about the YouTube video, channel or creator rather than the title. */
+const VIDEO_REF = /\b(this|the|your|great|best|good|amazing|awesome|nice|love (this|the|your)) (video|vid|channel|essay|breakdown|analysis|edit|editing|upload)s?\b|\b(you|u) (explained|nailed|did a)\b|\bsubscribe[ds]?\b|\bthis channel\b/i;
+
+export function mentionsTheVideo(text: string): boolean {
+  return VIDEO_REF.test(text);
+}

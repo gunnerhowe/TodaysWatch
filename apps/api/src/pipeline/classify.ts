@@ -146,7 +146,7 @@ export interface ClassifyOutcome {
 export async function classifyAll(
   title: { name: string; year: number | null; type: string },
   items: ToClassify[],
-  opts: { prescore: boolean; onProgress?: (done: number) => void },
+  opts: { prescore: boolean; onProgress?: (done: number) => void; onReview?: (done: number, total: number) => void },
 ): Promise<ClassifyOutcome> {
   const labels: Label[] = [];
   let usedFallback = false;
@@ -188,7 +188,7 @@ export async function classifyAll(
     labels.push(...got);
     opts.onProgress?.(labels.length);
   }
-  const reviewed = await reviewHardCases(title, items, labels, opts.prescore);
+  const reviewed = await reviewHardCases(title, items, labels, opts.prescore, opts.onReview);
   return { labels, usedFallback, fallbackReason, reviewed };
 }
 
@@ -212,12 +212,14 @@ async function reviewHardCases(
   items: ToClassify[],
   labels: Label[],
   prescore: boolean,
+  onReview?: (done: number, total: number) => void,
 ): Promise<number> {
   const model = reviewModel();
   if (!model) return 0;
   const byIdx = new Map(items.map((it) => [it.idx, it]));
   const hard = labels.filter((l) => needsReview(l, byIdx.get(l.idx)?.text));
   let changed = 0;
+  if (hard.length) onReview?.(0, hard.length);
   for (let start = 0; start < hard.length; start += BATCH) {
     const chunk = hard.slice(start, start + BATCH);
     const batch = chunk.map((l) => byIdx.get(l.idx)!).filter(Boolean);
@@ -233,6 +235,7 @@ async function reviewHardCases(
       if (l.stance !== s2.stance || l.aboutTitle !== s2.aboutTitle || l.firsthand !== s2.firsthand) changed++;
       Object.assign(l, { aboutTitle: s2.aboutTitle, firsthand: s2.firsthand, stance: s2.stance, confidence: s2.confidence });
     }
+    onReview?.(Math.min(start + BATCH, hard.length), hard.length);
   }
   return changed;
 }

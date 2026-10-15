@@ -164,6 +164,7 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
         p.classified = done;
         p.emit("classifying");
       },
+      onReview: (done, total) => p.emit("classifying", `Double-checking ${done} of ${total} tricky ones with a second model`),
     });
     notes.push(
       `classifier: ${outcome.labels.length} labelled, ${outcome.reviewed} changed on second opinion${outcome.usedFallback ? ` (backup classifier used: ${outcome.fallbackReason})` : ""}`,

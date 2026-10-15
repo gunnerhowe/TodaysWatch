@@ -214,3 +214,16 @@ export function cleanItems(raw: RawItem[], opts: CleanOptions): { items: CleanIt
   stats.output = out.length;
   return { items: out, stats };
 }
+
+/**
+ * Round-robin across sources, so a per-title labelling cap samples every source fairly
+ * instead of whichever source was stored first. Order within a source is kept.
+ */
+export function interleaveBySource<T extends { source: string }>(items: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const it of items) (groups.get(it.source) ?? groups.set(it.source, []).get(it.source)!).push(it);
+  const lists = [...groups.values()];
+  const out: T[] = [];
+  for (let i = 0; out.length < items.length; i++) for (const l of lists) if (l[i]) out.push(l[i]!);
+  return out;
+}

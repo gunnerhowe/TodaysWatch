@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawItem } from "../sources/types.ts";
-import { cleanItems, excerptOf, isLinkOnly, jaccard, looksEnglish, wordCount } from "./clean.ts";
+import { cleanItems, excerptOf, interleaveBySource, isLinkOnly, jaccard, looksEnglish, wordCount } from "./clean.ts";
 
 let n = 0;
 const item = (text: string, over: Partial<RawItem> = {}): RawItem => ({
@@ -102,5 +102,20 @@ describe("cleanItems", () => {
     expect(items).toHaveLength(20);
     expect(items.filter((i) => i.source === "YOUTUBE")).toHaveLength(15);
     expect(items.filter((i) => i.source === "BLUESKY")).toHaveLength(5);
+  });
+});
+
+describe("interleaveBySource", () => {
+  it("takes from each source in turn so a cap samples all of them", () => {
+    const items = [
+      ...Array.from({ length: 5 }, (_, i) => ({ source: "YOUTUBE", i })),
+      ...Array.from({ length: 2 }, (_, i) => ({ source: "BLUESKY", i })),
+      { source: "TMDB_REVIEW", i: 0 },
+    ];
+    const out = interleaveBySource(items);
+    expect(out).toHaveLength(8);
+    expect(out.slice(0, 3).map((x) => x.source)).toEqual(["YOUTUBE", "BLUESKY", "TMDB_REVIEW"]);
+    expect(out.slice(0, 6).map((x) => x.source)).toEqual(["YOUTUBE", "BLUESKY", "TMDB_REVIEW", "YOUTUBE", "BLUESKY", "YOUTUBE"]);
+    expect(out.filter((x) => x.source === "YOUTUBE").map((x) => x.i)).toEqual([0, 1, 2, 3, 4]);
   });
 });

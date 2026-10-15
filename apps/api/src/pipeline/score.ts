@@ -11,7 +11,7 @@ import * as youtube from "../sources/youtube.ts";
 import { typeToKind } from "../titles.ts";
 import { loadBaselines } from "./baselines.ts";
 import { classifyAll, type ToClassify } from "./classify.ts";
-import { cleanItems } from "./clean.ts";
+import { cleanItems, interleaveBySource } from "./clean.ts";
 import { ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { summarize } from "./summary.ts";
@@ -140,7 +140,8 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
     });
     // When Nemotron can label, upgrade any backup-classifier labels too.
     const needsLabel = (c: string | null) => (llmLabelling() ? c !== currentLlmTag() : !isCurrentLabel(c));
-    const todo = pending.filter((m) => needsLabel(m.classifier)).slice(0, env.CLASSIFY_MAX_PER_TITLE);
+    // Fair across sources: otherwise the cap fills up with whichever source was stored first.
+    const todo = interleaveBySource(pending.filter((m) => needsLabel(m.classifier))).slice(0, env.CLASSIFY_MAX_PER_TITLE);
     const toClassify: ToClassify[] = todo.map((m, idx) => {
       const c = ctx.get(`${m.source}:${m.externalId}`);
       return { idx, text: c?.text ?? m.excerpt, threadTitle: c?.threadTitle ?? null, firsthandContext: c?.firsthandContext ?? false };

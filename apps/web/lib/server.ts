@@ -5,7 +5,11 @@ import { SignJWT } from "jose";
 export const GUEST_COOKIE = "tp_guest";
 export const DEMO_COOKIE = "tp_demo";
 
-const API = process.env.API_BASE_URL ?? "http://localhost:8080";
+/** Base URLs without trailing slashes, so a value pasted as "https://host/" still works. */
+const trimUrl = (u: string) => u.trim().replace(/\/+$/, "");
+export const API_BASE = trimUrl(process.env.API_BASE_URL || "http://localhost:8080");
+export const STREAM_URL = trimUrl(process.env.NEXT_PUBLIC_STREAM_URL || process.env.API_BASE_URL || "http://localhost:8080");
+const API = API_BASE;
 
 export async function guestToken(): Promise<string | null> {
   return (await cookies()).get(GUEST_COOKIE)?.value ?? null;

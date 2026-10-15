@@ -21,7 +21,8 @@ export async function buildApp() {
     bodyLimit: 256 * 1024,
   });
   await app.register(cors, {
-    origin: env.WEB_ORIGIN.split(",").map((s) => s.trim()),
+    // Browsers send Origin with no trailing slash, so normalize what was configured.
+    origin: env.WEB_ORIGIN.split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean),
     credentials: false,
     methods: ["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["authorization", "content-type", "mcp-session-id", "mcp-protocol-version", "last-event-id"],

@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { guestToken } from "@/lib/server";
+import { API_BASE, guestToken } from "@/lib/server";
 
 /**
  * Normal calls go browser -> this route handler -> API, adding the shared secret and the
  * visitor's guest token. Only /v1 paths are forwarded.
  */
-const API = process.env.API_BASE_URL ?? "http://localhost:8080";
+const API = API_BASE;
 
 async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;

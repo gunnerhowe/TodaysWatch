@@ -84,7 +84,7 @@ function Footer() {
             .
           </p>
         </div>
-        <p>Scores come from public comments collected through official APIs (YouTube, Bluesky, TMDB reviews, and Reddit or Trakt when enabled). Taste matching by Qloo. Classification by NVIDIA Nemotron on Nebius.</p>
+        <p>Scores come from public comments collected through official APIs (YouTube, Bluesky, TMDB reviews, and Reddit or Trakt when enabled), plus thumbs from Tonight's Pick users. Taste matching by Qloo. Classification by NVIDIA Nemotron on Nebius.</p>
       </div>
     </footer>
   );

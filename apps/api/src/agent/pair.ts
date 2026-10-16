@@ -53,8 +53,13 @@ export async function pairCandidates(
   for (const t of bSeen) state.seenIds.add(t.id);
   for (const t of bLiked) state.seenIds.add(t.id);
 
-  const aSig = await ids(state, aLiked, 5);
-  const bSig = [...(await ids(state, bLiked, 5)), ...bNamed.slice(0, 5)].slice(0, 5);
+  let aSig = await ids(state, aLiked, 5);
+  let bSig = [...(await ids(state, bLiked, 5)), ...bNamed.slice(0, 5)].slice(0, 5);
+  // Only one person has any likes (often a new voice user): rank for that taste alone and say
+  // so, rather than stopping at a question the speaker may already have answered.
+  const oneSided: "a" | "b" | null = aSig.length && !bSig.length ? "a" : !aSig.length && bSig.length ? "b" : null;
+  if (oneSided === "a") bSig = aSig;
+  if (oneSided === "b") aSig = bSig;
   if (aSig.length === 0 || bSig.length === 0) {
     return {
       status: "needs_input",
@@ -131,14 +136,17 @@ export async function pairCandidates(
       origin: "pair_pick",
       sharedTags: shared,
       pairWorse: fit.worse,
-      perPerson: [
-        { who: "You", reason: `#${r.posA + 1} of ${r.n} for your taste${aName ? ` (you liked ${aName})` : ""}` },
-        { who: "Them", reason: `#${r.posB + 1} of ${r.n} for their taste${bName ? ` (they liked ${bName})` : ""}` },
-      ],
+      perPerson: oneSided
+        ? [{ who: oneSided === "a" ? "You" : "Them", reason: `#${r.posA + 1} of ${r.n} for ${oneSided === "a" ? "your" : "their"} taste${(oneSided === "a" ? aName : bName) ? ` (${oneSided === "a" ? "you" : "they"} liked ${oneSided === "a" ? aName : bName})` : ""}` }]
+        : [
+            { who: "You", reason: `#${r.posA + 1} of ${r.n} for your taste${aName ? ` (you liked ${aName})` : ""}` },
+            { who: "Them", reason: `#${r.posB + 1} of ${r.n} for their taste${bName ? ` (they liked ${bName})` : ""}` },
+          ],
     });
   }
   return {
     status: results.length ? "ok" : "empty",
+    ...(oneSided && { note: `Only ${oneSided === "a" ? "your" : "their"} likes are known, so these are ranked for ${oneSided === "a" ? "your" : "their"} taste alone. Say so in one short clause.` }),
     shared_taste: shared,
     candidates: results.slice(0, 12).map((r) => ({
       id: r.title.id,

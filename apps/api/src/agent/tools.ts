@@ -348,8 +348,18 @@ export const handlers: Record<string, Handler> = {
       partnerLiked = pctx.liked;
       partnerSeen = pctx.seen;
     }
-    const named = arr(a.their_likes);
-    const r = await pairCandidates(state, ctx.liked, partnerLiked, partnerSeen, named, (a.type as "movie" | "tv" | "any") ?? "any");
+    // Titles the other person named ("my partner loves Ted Lasso"). Qloo signals must be entity
+    // IDs, so resolve each name through TMDB the same way recommend_titles does.
+    for (const raw of arr(a.their_likes).slice(0, 5)) {
+      const name = raw.slice(0, 80);
+      const hit = (await searchTitles(name).catch(() => [])).find((h) => normTitle(h.name) === normTitle(name));
+      const t = hit ? await upsertTitle(hit.type, hit.tmdbId).catch(() => null) : null;
+      if (t && !partnerLiked.some((x) => x.id === t.id)) {
+        state.remember(t);
+        partnerLiked.push(t);
+      }
+    }
+    const r = await pairCandidates(state, ctx.liked, partnerLiked, partnerSeen, [], (a.type as "movie" | "tv" | "any") ?? "any");
     return r;
   },
 };

@@ -27,13 +27,12 @@ export function spokenScore(s: Pick<Score, "state" | "likedPct" | "countedN">): 
 export function spokenPick(p: PickCard, i: number): string {
   const ord = ["First", "Second", "Third", "Fourth", "Fifth"][i] ?? "Next";
   const year = p.year ? `, from ${p.year}` : "";
-  // "Think slow burn and folk horror." Tags are labels, not adjectives, so "It's Family" read badly.
-  const tags = p.sharedTags.map((t) => t.replace(/[,.;:]+$/, "").trim()).filter(Boolean).slice(0, 2);
-  const why = tags.length ? `Think ${tags.join(" and ").toLowerCase()}.` : "";
+  // Shared Qloo tags aren't read aloud: raw keyword tags ("Think comics." for Succession, "Think
+  // scouting and nfl.") sounded broken. The web card still shows why each pick fits.
   // A score-pending pick is queued for scoring, so "not enough talk" would be wrong (it was said
   // about A Quiet Place, one of 2018's most-discussed films, before it had been scored).
   const score = p.scorePending ? "we're still reading what people said" : spokenScore(p.score);
-  return clampWords(`${ord}, ${p.name}${year}: ${score}. ${why}`, 25);
+  return clampWords(`${ord}, ${p.name}${year}: ${score}.`, 25);
 }
 
 export function spokenAnswer(a: FinalAnswer): string {

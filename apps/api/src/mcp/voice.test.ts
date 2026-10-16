@@ -58,9 +58,9 @@ describe("voice rules", () => {
 });
 
 describe("spoken tags", () => {
-  it("cleans stray punctuation and reads tags naturally (real 'It's Family,.' output)", () => {
-    const s = spokenPick(card({ name: "Shining Vale", sharedTags: ["Family,", "Darkly Comedic"] }), 2);
-    expect(s).toContain("Think family and darkly comedic.");
+  it("doesn't read raw tag labels aloud (real 'Think comics.' output for Succession)", () => {
+    const s = spokenPick(card({ name: "Succession", sharedTags: ["Comics", "Family,"] }), 0);
+    expect(s).not.toMatch(/Think|comics/i);
     expect(s).not.toMatch(/,\./);
   });
 });

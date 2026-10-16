@@ -83,11 +83,19 @@ export function ProvenanceDrawer({ runId, note }: { runId: string; note: string 
   );
 }
 
+// Internal title IDs (cuid) mean nothing to a reader, and pick objects printed as "[object Object]".
+const isInternalId = (x: unknown) => typeof x === "string" && /^c[a-z0-9]{20,}$/.test(x);
+function listLine(v: unknown[]): string {
+  if (v.every(isInternalId)) return `${v.length} title${v.length === 1 ? "" : "s"}`;
+  const items = v.map((x) => (x && typeof x === "object" ? String((x as { name?: unknown; title?: unknown }).name ?? (x as { title?: unknown }).title ?? (isInternalId((x as { id?: unknown }).id) ? "a title" : JSON.stringify(x).slice(0, 40))) : String(x)));
+  return items.slice(0, 6).join(", ") + (items.length > 6 ? "…" : "");
+}
+
 function argsLine(args: unknown): string {
   if (!args || typeof args !== "object") return "";
   return Object.entries(args as Record<string, unknown>)
     .filter(([, v]) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0))
-    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.slice(0, 6).join(", ") + (v.length > 6 ? "…" : "") : typeof v === "object" ? JSON.stringify(v).slice(0, 80) : String(v)}`)
+    .map(([k, v]) => `${k}: ${Array.isArray(v) ? listLine(v) : typeof v === "object" ? JSON.stringify(v).slice(0, 80) : String(v)}`)
     .join(" · ")
     .slice(0, 300);
 }

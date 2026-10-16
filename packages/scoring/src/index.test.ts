@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   capCommunity,
   tasteMatch,
+  poorlyReceived,
   groupFit,
   comparePairFit,
   computeScore,
@@ -191,5 +192,15 @@ describe("taste match", () => {
   });
   it("is 0, not NaN, with nothing to compare", () => {
     expect(tasteMatch({ genres: [], tags: [] }, { genres: [], tags: [] }).pct).toBe(0);
+  });
+});
+
+describe("reception floor for picks", () => {
+  it("keeps well-liked and genre-strong titles, drops poorly received ones", () => {
+    expect(poorlyReceived(31, 0.05)).toBe(true); // Disclosure Day: 31% liked, beats 5% of sci-fi
+    expect(poorlyReceived(45, 0.6)).toBe(false); // divisive, but good for its genre
+    expect(poorlyReceived(48, null)).toBe(true); // no genre comparison yet
+    expect(poorlyReceived(72, 0.1)).toBe(false); // most viewers liked it
+    expect(poorlyReceived(null, null)).toBe(false); // not scored yet: can't judge
   });
 });

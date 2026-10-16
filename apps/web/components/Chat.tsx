@@ -157,7 +157,8 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
           e.preventDefault();
           void send(input);
         }}
-        className="sticky bottom-3 space-y-2"
+        // a solid backdrop, so the chips and box don't sit on top of the answer they cover
+        className="sticky bottom-0 -mx-4 space-y-2 bg-[color-mix(in_srgb,var(--bg)_94%,transparent)] px-4 pb-3 pt-3 backdrop-blur"
       >
         {turns.length > 0 && (
           <div className="flex flex-wrap gap-2">

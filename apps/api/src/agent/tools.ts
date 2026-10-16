@@ -1,5 +1,5 @@
 import type { Title } from "@prisma/client";
-import { DEFAULT_PICK_WEIGHTS, EARLY_MIN, pickScore, rankToTaste } from "@tp/scoring";
+import { DEFAULT_PICK_WEIGHTS, EARLY_MIN, pickScore, poorlyReceived, rankToTaste } from "@tp/scoring";
 import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
@@ -251,6 +251,12 @@ export const handlers: Record<string, Handler> = {
     });
     for (const t of rows) {
       state.remember(t);
+      // Too poorly received to recommend, however well it fits (31% liked, bottom of its genre).
+      const shownPct = t.scoreState === "FULL" || t.scoreState === "EARLY" ? t.likedPct : null;
+      if (poorlyReceived(shownPct, t.genreAdjusted) && !state.dropped.has(t.id)) {
+        state.dropped.set(t.id, `poorly received: only ${shownPct}% of viewers liked it`);
+        state.candidates.delete(t.id);
+      }
       if (isStale(t) && queued < 5) {
         await enqueueScore(t.id, true);
         queued++;
@@ -270,6 +276,7 @@ export const handlers: Record<string, Handler> = {
         pick_score: round(ps),
         watchable_tonight: state.available.get(t.id) ?? null,
         eligible_as_pick: t.countedN >= EARLY_MIN && !state.excluded(t.id),
+        ...(state.dropped.has(t.id) ? { not_eligible: state.dropped.get(t.id) } : {}),
       });
     }
     // watchable tonight first, then by pick score
@@ -335,7 +342,9 @@ export const handlers: Record<string, Handler> = {
       const likedTags = likedTagsByType.get(et)!;
       const shared = titleTags.filter((n) => likedTags.has(n.toLowerCase())).slice(0, 4);
       const c = state.candidates.get(id);
-      if (c) c.sharedTags = shared.length ? shared : titleTags.slice(0, 3);
+      // Only tags genuinely shared with their likes. A title's own tags ("Festive", "Halloween")
+      // passed off as shared led the model to describe a dark thriller as "light-hearted, festive".
+      if (c) c.sharedTags = shared;
       out.push({ id, title: t.name, shared_tags: shared, title_tags: titleTags.slice(0, 6) });
     }
     return { fits: out, liked_examples: liked.slice(0, 3).map((l) => l.name) };

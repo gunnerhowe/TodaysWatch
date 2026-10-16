@@ -351,6 +351,7 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
     ids = (r.kept as string[]) ?? ids;
   }
   await call("get_scores", { ids: ids.slice(0, 40) });
+  ids = ids.filter((id) => !state.excluded(id)); // get_scores drops poorly received titles
   await freshCounts(state, ids);
   const eligible = ids.filter((id) => (state.titles.get(id)?.countedN ?? 0) >= EARLY_MIN);
   if (eligible.length >= 2 && !state.pairId) await call("rank_for_user", { candidates: eligible.slice(0, 10) });

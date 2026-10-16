@@ -8,6 +8,7 @@ export interface Candidate {
   taste: number | null;
   /** where it came from (recommend / trending / pair) */
   origin: string;
+  /** Qloo tags this title shares with the person's liked titles (empty when nothing matched) */
   sharedTags: string[];
   perPerson?: { who: string; reason: string }[];
   pairWorse?: number;

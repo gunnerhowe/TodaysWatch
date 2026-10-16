@@ -49,7 +49,10 @@ export async function loadUserContext(profileId: string, pairId?: string | null)
 }
 
 export function applyContext(state: TurnState, ctx: UserContext) {
-  for (const t of ctx.liked) state.likedIds.add(t.id);
+  for (const t of ctx.liked) {
+    state.likedIds.add(t.id);
+    state.titles.set(t.id, t); // for "why it fits you" (you liked …)
+  }
   for (const t of ctx.disliked) state.dislikedIds.add(t.id);
   for (const t of ctx.seen) state.seenIds.add(t.id);
 }

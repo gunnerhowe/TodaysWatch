@@ -223,6 +223,16 @@ export function capCommunity(up: number, down: number, outsideCounted: number, m
   return { liked, disliked: max - liked };
 }
 
+/**
+ * Too poorly received to recommend: under half of viewers liked it, and it's in the bottom 30%
+ * of its genre (or has no genre comparison). The genre check keeps divisive-but-good-for-the-genre
+ * titles (horror often lands below 50%); a 31%-liked film that beats 5% of sci-fi is out.
+ */
+export function poorlyReceived(likedPct: number | null | undefined, genreAdjusted: number | null | undefined): boolean {
+  if (likedPct == null) return false;
+  return likedPct < 50 && (genreAdjusted == null || genreAdjusted < 0.3);
+}
+
 export interface TasteProfile {
   /** TMDB genres of the titles this person liked, with repeats (so counts are weights) */
   genres: readonly string[];

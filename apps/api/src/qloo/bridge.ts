@@ -33,9 +33,15 @@ function harnessCommand(): { command: string; args: string[] } {
   return { command: "qloo", args: [] };
 }
 
+/** The harness's environment: ours, plus the Qloo server our key belongs to. */
+function harnessEnv(): Record<string, string> {
+  const base = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>;
+  return { ...base, QLOO_BASE_URL: env.QLOO_BASE_URL };
+}
+
 let client: Client | null = null;
 let connecting: Promise<Client> | null = null;
-let ready: { ok: boolean; detail?: string; checksum?: string } = { ok: false, detail: "not started" };
+let ready: { ok: boolean; detail?: string; checksum?: string; baseUrl?: string; probe?: unknown } = { ok: false, detail: "not started" };
 
 async function connect(): Promise<Client> {
   if (client) return client;
@@ -44,7 +50,7 @@ async function connect(): Promise<Client> {
     const transport = new StdioClientTransport({
       command,
       args: [...args, "mcp"],
-      env: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>,
+      env: harnessEnv(),
       stderr: "pipe",
     });
     const c = new Client({ name: "tonights-pick", version: "1.0.0" });
@@ -77,7 +83,28 @@ export async function bootQloo(): Promise<typeof ready> {
     const caps = parseEnvelope(r) as unknown as Record<string, unknown>;
     const policy = caps.execution_policy as { active_transport?: string; reason?: string } | undefined;
     const ok = !!env.QLOO_API_KEY && policy?.active_transport !== "none";
-    ready = { ok, detail: ok ? "credential ready" : (policy?.reason ?? "QLOO_API_KEY missing"), checksum: caps.contract_checksum as string | undefined };
+    ready = { ok, detail: ok ? "credential ready" : (policy?.reason ?? "QLOO_API_KEY missing"), checksum: caps.contract_checksum as string | undefined, baseUrl: env.QLOO_BASE_URL };
+    if (ok) {
+      // One real call, so "ready" means the key works against this server, not just that it's set.
+      const t0 = Date.now();
+      const probe = parseEnvelope(await c.callTool({ name: "qloo_find_tags", arguments: { query: "comedy", limit: 2 } }, undefined, { timeout: 30_000 }));
+      const first = Array.isArray(probe.results) ? probe.results[0] : probe.results;
+      ready.probe = {
+        status: probe.status,
+        resultCount: probe.result_count ?? null,
+        ms: Date.now() - t0,
+        error: probe.error ?? null,
+        summary: probe.summary?.slice(0, 200) ?? null,
+        sample: JSON.stringify(first ?? null).slice(0, 400),
+      };
+      lastSearchError = null;
+      const hits = await qlooSearch("Hereditary", "movie");
+      ready.probe = { ...(ready.probe as object), search: { hits: hits.length, first: hits[0] ?? null, error: lastSearchError } };
+      if (probe.status === "error") {
+        ready.ok = false;
+        ready.detail = `Qloo call failed: ${probe.error?.code ?? "error"} ${probe.summary ?? ""}`.trim();
+      }
+    }
   } catch (e) {
     ready = { ok: false, detail: `qloo mcp failed to start: ${e instanceof Error ? e.message : e}` };
   }
@@ -182,6 +209,8 @@ function stableStringify(v: unknown): string {
   return JSON.stringify(v);
 }
 
+let lastSearchError: string | null = null;
+
 export interface QlooSearchHit {
   entityId: string;
   name: string;
@@ -201,7 +230,7 @@ export async function qlooSearch(query: string, type: "movie" | "tv_show", ctx: 
       await ensureBudget("qloo_calls", 1);
       const { command, args } = harnessCommand();
       const { stdout } = await execFileP(command, [...args, "api", "search", "--query", query, "--type", type, "--take", "5", "--json"], {
-        env: process.env,
+        env: harnessEnv(),
         timeout: 20_000,
         maxBuffer: 4 * 1024 * 1024,
       });
@@ -210,8 +239,11 @@ export async function qlooSearch(query: string, type: "movie" | "tv_show", ctx: 
     });
     list = out.value;
     status = list.length ? "ok" : "empty";
-  } catch {
+  } catch (e) {
     status = "error";
+    // execFile errors carry the CLI's stdout/stderr; keep a short, key-free message for /health
+    const ex = e as { stdout?: string; stderr?: string; message?: string };
+    lastSearchError = String(ex.stdout || ex.stderr || ex.message || e).replace(/api[_-]?key[^\s,]*/gi, "api-key=…").slice(0, 300);
   }
   const latencyMs = Date.now() - started;
   ctx.trace?.push({ tool: "qloo_search", args: { query, type }, status, resultCount: list.length, latencyMs, cached: hit });

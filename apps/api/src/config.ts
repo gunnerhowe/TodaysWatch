@@ -18,6 +18,8 @@ const EnvZ = z.object({
 
   QLOO_API_KEY: opt,
   QLOO_BIN: opt, // override path to the harness bin; default resolves @qloo/qloo-harness
+  // The hackathon key only works against Qloo's hackathon server, not the harness default (api.qloo.com).
+  QLOO_BASE_URL: z.string().default("https://hackathon.api.qloo.com"),
   QLOO_DISABLED: bool(false),
 
   LLM_PROVIDER: z.enum(["nebius", "anthropic"]).default("nebius"),

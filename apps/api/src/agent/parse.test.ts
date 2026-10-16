@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isVague, parseRequest } from "./parse.ts";
+import { isVague, parseRequest, refersBack } from "./parse.ts";
 
 describe("parseRequest", () => {
   it("runtime limits", () => {
@@ -32,5 +32,14 @@ describe("parseRequest", () => {
   it("type", () => {
     expect(parseRequest("a show to binge").constraints.type).toBe("tv");
     expect(parseRequest("a movie for tonight").constraints.type).toBe("movie");
+  });
+});
+
+describe("follow-ups that point back at earlier picks", () => {
+  it("detects references to titles already shown", () => {
+    for (const t of ["Which of those is shortest?", "tell me more about the second one", "show me that one again", "what about those three"]) expect(refersBack(t)).toBe(true);
+  });
+  it("treats new asks as wanting new titles", () => {
+    for (const t of ["Give me more options", "something scarier", "anything else?", "more like that but funnier"]) expect(refersBack(t)).toBe(false);
   });
 });

@@ -25,7 +25,6 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
   const [includeSeen, setIncludeSeen] = useState(false);
   const sessionId = useRef<string | undefined>(undefined);
   const started = useRef(false);
-  const bottom = useRef<HTMLDivElement>(null);
 
   const patch = (id: number, f: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? f(t) : t)));
 
@@ -71,9 +70,15 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
+  // Scroll once per new message, putting it at the top of the screen so the answer grows
+  // below it. Scrolling on every progress step yanked the page (and fought the reader's own
+  // scrolling on phones), and aimed above the sticky input box.
+  const turnCount = turns.length;
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns]);
+    if (!turnCount) return;
+    document.getElementById(`turn-${turns[turnCount - 1]!.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnCount]);
 
   const notThis = (turnId: number, idx: number) =>
     patch(turnId, (t) => {
@@ -100,7 +105,7 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
       )}
 
       {turns.map((t, ti) => (
-        <section key={t.id} className="space-y-3" aria-label={`Request: ${t.user}`}>
+        <section key={t.id} id={`turn-${t.id}`} className="scroll-mt-20 space-y-3" aria-label={`Request: ${t.user}`}>
           <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-[var(--bg-3)] px-4 py-2">{t.user}</p>
           {!t.answer && !t.error && (
             <div className="surface rounded-xl p-3 text-sm" role="status" aria-live="polite">
@@ -146,7 +151,6 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
           )}
         </section>
       ))}
-      <div ref={bottom} />
 
       <form
         onSubmit={(e) => {

@@ -7,7 +7,7 @@ import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
 import { buildCards } from "./cards.ts";
 import { applyContext, loadUserContext, settingsConstraints, type UserContext } from "./context.ts";
-import { isVague, parseRequest } from "./parse.ts";
+import { isVague, parseRequest, refersBack } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
 import { enforceConstraints, handlers, TOOL_DEFS, TOOL_LABELS } from "./tools.ts";
@@ -56,6 +56,15 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   // the profile's language and streaming services (combined across a group) apply by default
   Object.assign(state.constraints, await settingsConstraints(ctx, parsed.constraints, state.pairId ? ctx.groupMembers.map((m) => m.profileId) : []));
   state.vibes = parsed.vibes;
+  // Follow-ups ("give me more options") shouldn't repeat what this chat already offered,
+  // unless the person is pointing back at those titles.
+  if (!refersBack(input.message)) {
+    const earlier = await prisma.agentRun.findMany({ where: { sessionId: session.id, id: { not: run.id } }, orderBy: { createdAt: "desc" }, take: 6, select: { picks: true } });
+    for (const r of earlier) {
+      const p = r.picks as { picks?: string[]; backups?: string[] } | null;
+      for (const id of [...(p?.picks ?? []), ...(p?.backups ?? [])]) state.shownIds.add(id);
+    }
+  }
 
   let usage = { in: 0, out: 0, cost: 0 };
   let rejected = 0;

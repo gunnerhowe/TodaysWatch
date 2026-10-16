@@ -54,6 +54,14 @@ export interface ParsedRequest {
   forTwo: boolean;
 }
 
+/**
+ * The message points back at titles already shown ("which of those is shortest?", "the second
+ * one", "show me that again"), so they shouldn't be excluded from this turn.
+ */
+export function refersBack(text: string): boolean {
+  return /\b(of (those|these|them)|(those|these) (three|3|two|picks|ones|options)|the (first|second|third|last|1st|2nd|3rd) one|that one|this one|(it|that|those|them) again|again)\b/i.test(text);
+}
+
 export function parseRequest(text: string): ParsedRequest {
   const t = text.toLowerCase();
   const c: Constraints = {};

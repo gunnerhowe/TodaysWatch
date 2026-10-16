@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { STARTER_CHIPS, type AgentEvent, type FinalAnswer, type PickCard as Card } from "@tp/shared";
+import { STARTER_CHIPS, type AgentEvent, type FinalAnswer, type PickCard as Card, type Rating } from "@tp/shared";
 import { readSse, streamToken } from "@/lib/client";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
@@ -15,6 +15,36 @@ interface Turn {
   error: string | null;
   picks: Card[];
   backups: Card[];
+  /** thumbs given on this turn's cards, so they show again when the chat is reopened */
+  ratings?: Record<string, Pick<Rating, "value" | "seen" | "wantToWatch">>;
+}
+
+// The chat is kept on this device, so leaving Ask and coming back shows it again.
+const STORE = "tp_chat_v1";
+const KEEP_MS = 7 * 86_400_000;
+interface Saved {
+  sessionId?: string;
+  turns: Turn[];
+  savedAt: number;
+}
+function loadSaved(): Saved | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) ?? "null") as Saved | null;
+    if (!s || !Array.isArray(s.turns) || Date.now() - s.savedAt > KEEP_MS) return null;
+    // a request that was still running when the page closed can't resume
+    s.turns = s.turns.map((t) => (t.answer || t.error ? t : { ...t, error: "This request was interrupted. Ask again." }));
+    return s;
+  } catch {
+    return null;
+  }
+}
+function save(s: Saved | null) {
+  try {
+    if (s) localStorage.setItem(STORE, JSON.stringify(s));
+    else localStorage.removeItem(STORE);
+  } catch {
+    /* storage off (private mode): the chat just isn't kept */
+  }
 }
 
 /** F5: the agent chat. Streams tool steps, renders 3 pick cards + 2 backups, supports follow-ups. */
@@ -62,13 +92,34 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
     }
   };
 
+  // Restore the saved chat first; then a request from the home page (?q=) continues it.
+  const [restored, setRestored] = useState(false);
   useEffect(() => {
-    if (initialQuery && !started.current) {
-      started.current = true;
-      void send(initialQuery);
+    const s = loadSaved();
+    if (s) {
+      sessionId.current = s.sessionId;
+      setTurns(s.turns);
     }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored || !initialQuery || started.current) return;
+    started.current = true;
+    // drop ?q= so coming back to Ask later doesn't send it again
+    window.history.replaceState(null, "", window.location.pathname);
+    void send(initialQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery]);
+  }, [restored, initialQuery]);
+  useEffect(() => {
+    if (restored) save(turns.length ? { sessionId: sessionId.current, turns: turns.slice(-20), savedAt: Date.now() } : null);
+  }, [turns, restored]);
+
+  const newChat = () => {
+    sessionId.current = undefined; // the next message starts a new conversation on the server too
+    setTurns([]);
+    save(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // Scroll once per new message, putting it at the top of the screen so the answer grows
   // below it. Scrolling on every progress step yanked the page (and fought the reader's own
@@ -89,7 +140,14 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
 
   return (
     <div className="space-y-6">
-      {turns.length === 0 && (
+      {turns.length > 0 && (
+        <div className="-mt-2 flex justify-end">
+          <button type="button" onClick={newChat} disabled={busy} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line px-3 text-sm hover:bg-[var(--bg-3)] disabled:opacity-40">
+            <span aria-hidden>＋</span> New chat
+          </button>
+        </div>
+      )}
+      {restored && turns.length === 0 && (
         <div className="space-y-3 text-center">
           <p className="text-dim">Tell me what you&apos;re in the mood for.</p>
           <ul className="flex flex-wrap justify-center gap-2">
@@ -127,7 +185,14 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
               {t.picks.length > 0 && (
                 <ol className="space-y-3">
                   {t.picks.map((c, i) => (
-                    <PickCard key={c.titleId} card={c} rank={i + 1} onNotThis={() => notThis(t.id, i)} />
+                    <PickCard
+                      key={c.titleId}
+                      card={c}
+                      rank={i + 1}
+                      onNotThis={() => notThis(t.id, i)}
+                      rating={t.ratings?.[c.titleId] ?? null}
+                      onRated={(r) => patch(t.id, (x) => ({ ...x, ratings: { ...x.ratings, [c.titleId]: r } }))}
+                    />
                   ))}
                 </ol>
               )}

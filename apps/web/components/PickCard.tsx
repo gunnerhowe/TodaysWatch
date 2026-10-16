@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import type { PickCard as Card } from "@tp/shared";
+import type { PickCard as Card, Rating } from "@tp/shared";
 import { runtime, titleHref } from "@/lib/format";
 import { Poster } from "./Poster";
 import { ScoreChip } from "./Score";
 import { ThumbControls } from "./ThumbControls";
 
-export function PickCard({ card, rank, onNotThis }: { card: Card; rank: number; onNotThis?: () => void }) {
+export function PickCard({
+  card,
+  rank,
+  onNotThis,
+  rating,
+  onRated,
+}: {
+  card: Card;
+  rank: number;
+  onNotThis?: () => void;
+  /** the rating already given here, so it shows again when the chat is reopened */
+  rating?: Pick<Rating, "value" | "seen" | "wantToWatch"> | null;
+  onRated?: (r: Pick<Rating, "value" | "seen" | "wantToWatch">) => void;
+}) {
   const s = card.score;
   return (
     <li className="surface grid grid-cols-[88px_1fr] gap-3 rounded-2xl p-3 sm:grid-cols-[120px_1fr] sm:gap-4">
@@ -57,7 +70,7 @@ export function PickCard({ card, rank, onNotThis }: { card: Card; rank: number; 
         </div>
         <p className="text-xs text-dim">{card.providers.length ? `${card.rentOnly ? "Rent or buy on" : "Stream on"} ${card.providers.join(", ")}` : "Not available to watch in the US yet"}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <ThumbControls titleId={card.titleId} compact />
+          <ThumbControls titleId={card.titleId} compact initial={rating} onChange={onRated} />
           {onNotThis && (
             <button type="button" onClick={onNotThis} className="h-8 rounded-full border border-line px-3 text-xs text-dim hover:text-[var(--fg)]">
               Not this one

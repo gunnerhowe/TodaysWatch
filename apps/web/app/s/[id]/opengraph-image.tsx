@@ -28,7 +28,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: C.bg, color: C.fg, padding: "56px 64px", fontFamily: "sans-serif" }}>
         <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: C.accent, textTransform: "uppercase" }}>Tonight&apos;s Pick</div>
-        <div style={{ display: "flex", fontSize: card?.kind === "match" ? 58 : 54, fontWeight: 800, lineHeight: 1.1, marginTop: 18, maxWidth: 1060 }}>{headline}</div>
+        <div style={{ display: "flex", fontSize: card?.kind === "match" ? 58 : 46, fontWeight: 800, lineHeight: 1.1, marginTop: 14, maxWidth: 1060 }}>{headline}</div>
 
         {card?.kind === "match" && (
           <div style={{ display: "flex", flexDirection: "column", marginTop: 26 }}>
@@ -44,15 +44,15 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         )}
 
         {card?.kind === "pick" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 30 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 26 }}>
             {card.picks.slice(0, 3).map((p, i) => (
               <div
                 key={i}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: i === 0 ? "22px 28px" : "14px 28px", borderRadius: 24, background: i === 0 ? C.card : "transparent", border: `2px solid ${C.line}` }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: i === 0 ? "16px 28px" : "10px 28px", borderRadius: 24, background: i === 0 ? C.card : "transparent", border: `2px solid ${C.line}` }}
               >
                 <div style={{ display: "flex", flexDirection: "column", maxWidth: 720 }}>
-                  <div style={{ display: "flex", fontSize: i === 0 ? 46 : 32, fontWeight: 800, textTransform: "uppercase" }}>{p.name.length > 34 ? `${p.name.slice(0, 33)}…` : p.name}</div>
-                  <div style={{ display: "flex", fontSize: 24, color: C.faint }}>{[p.year, p.type === "tv" ? "TV" : "Movie"].filter(Boolean).join(" · ")}</div>
+                  <div style={{ display: "flex", fontSize: i === 0 ? 40 : 30, fontWeight: 800, textTransform: "uppercase" }}>{p.name.length > 34 ? `${p.name.slice(0, 33)}…` : p.name}</div>
+                  <div style={{ display: "flex", fontSize: 22, color: C.faint }}>{[p.year, p.type === "tv" ? "TV" : "Movie"].filter(Boolean).join(" · ")}</div>
                 </div>
                 {p.likedPct !== null ? (
                   <div style={{ display: "flex", gap: 26 }}>
@@ -67,7 +67,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           </div>
         )}
 
-        <div style={{ display: "flex", marginTop: "auto", fontSize: 24, color: C.faint }}>
+        <div style={{ display: "flex", marginTop: "auto", paddingTop: 16, fontSize: 24, color: C.faint }}>
           {card?.kind === "match" ? "Find your movie match" : "Picks everyone will like, scored by real viewers"} · todays-watch.vercel.app
         </div>
       </div>

@@ -5,6 +5,7 @@ import { STARTER_CHIPS, type AgentEvent, type FinalAnswer, type PickCard as Card
 import { readSse, streamToken } from "@/lib/client";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
+import { ShareButton } from "./ShareButton";
 
 interface Turn {
   id: number;
@@ -139,6 +140,7 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
               )}
               {t.picks.length === 0 && !t.answer.question && <p className="text-dim">No picks this time.</p>}
               {t.backups.length > 0 && <p className="text-xs text-faint">{t.backups.length} backup{t.backups.length > 1 ? "s" : ""} ready if you tap &quot;Not this one&quot;.</p>}
+              {t.picks.length > 0 && <ShareButton body={{ kind: "pick", runId: t.answer.runId }} text={`Tonight's pick: ${t.picks[0]!.name}`} />}
               <ProvenanceDrawer runId={t.answer.runId} note={t.answer.note} />
             </div>
           )}

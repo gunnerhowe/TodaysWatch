@@ -229,6 +229,48 @@ export const PairZ = z.object({
 });
 export type Pair = z.infer<typeof PairZ>;
 
+/** How alike two people's tastes are (0-100), with what they share. */
+export const TasteMatchZ = z.object({
+  a: z.string(),
+  b: z.string(),
+  includesMe: z.boolean(),
+  pct: z.number().int().min(0).max(100),
+  sharedTags: z.array(z.string()),
+  sharedGenres: z.array(z.string()),
+  /** titles both have rated */
+  inCommon: z.number().int(),
+});
+export type TasteMatch = z.infer<typeof TasteMatchZ>;
+export const GroupMatchZ = z.object({
+  matches: z.array(TasteMatchZ),
+  /** people who need more likes before they can be matched */
+  waitingOn: z.array(z.string()),
+});
+export type GroupMatch = z.infer<typeof GroupMatchZ>;
+
+/** What a share link shows: built on the server from real results, never from client text. */
+export const ShareCardZ = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("pick"),
+    people: z.array(z.string()),
+    groupSize: z.number().int(),
+    picks: z.array(z.object({ name: z.string(), year: z.number().int().nullable(), type: TitleTypeZ, tmdbId: z.number().int(), likedPct: z.number().int().nullable(), dislikedPct: z.number().int().nullable() })),
+  }),
+  z.object({
+    kind: z.literal("match"),
+    a: z.string(),
+    b: z.string(),
+    pct: z.number().int(),
+    sharedTags: z.array(z.string()),
+    sharedGenres: z.array(z.string()),
+  }),
+]);
+export type ShareCard = z.infer<typeof ShareCardZ>;
+export const CreateShareZ = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("pick"), runId: z.string().max(40), code: z.string().max(20).optional() }),
+  z.object({ kind: z.literal("match"), code: z.string().max(20), index: z.number().int().min(0).max(9) }),
+]);
+
 export const CreatePairZ = z.object({
   size: z.number().int().min(GROUP_MIN).max(GROUP_MAX).default(2),
   name: z.string().trim().max(24).optional(),

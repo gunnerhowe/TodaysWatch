@@ -11,7 +11,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export const metadata: Metadata = {
   title: { default: "Tonight's Pick", template: "%s · Tonight's Pick" },
   description: "What should I watch tonight? Three picks you haven't seen, that fit your taste, that real viewers liked.",
-  metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
+  // Link previews need absolute image URLs; Vercel sets VERCEL_PROJECT_PRODUCTION_URL when SITE_URL isn't set.
+  metadataBase: new URL(process.env.SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")),
 };
 
 export const viewport: Viewport = { themeColor: "#0b0a09", width: "device-width", initialScale: 1 };

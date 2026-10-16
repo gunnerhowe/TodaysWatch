@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   capCommunity,
+  tasteMatch,
   groupFit,
   comparePairFit,
   computeScore,
@@ -167,5 +168,28 @@ describe("community ratings and group fit", () => {
     expect(loved.worse).toBeCloseTo(0.1);
     expect(comparePairFit(fine, loved)).toBeLessThan(0); // "fine for everyone" ranks first
     expect(groupFit([0.5, 0.9]).better).toBeCloseTo(0.7);
+  });
+});
+
+describe("taste match", () => {
+  const horror = { genres: ["Horror", "Horror", "Thriller", "Mystery"], tags: ["Slow Burn", "Dread", "Folk Horror", "Cult"] };
+  const horror2 = { genres: ["Horror", "Thriller", "Horror"], tags: ["dread", "Slow Burn", "Gore"] };
+  const comedy = { genres: ["Comedy", "Comedy", "Romance", "Family"], tags: ["Feel Good", "Witty", "Found Family"] };
+  it("similar tastes score high, different tastes low", () => {
+    const same = tasteMatch(horror, horror2);
+    const diff = tasteMatch(horror, comedy);
+    expect(same.pct).toBeGreaterThanOrEqual(75);
+    expect(diff.pct).toBeLessThan(10);
+    expect(same.sharedTags).toEqual(["Slow Burn", "Dread"]);
+    expect(same.sharedGenres[0]).toBe("Horror");
+  });
+  it("agreement on titles both rated counts once there are 3+", () => {
+    expect(tasteMatch(horror, comedy, { agreed: 2, total: 2 }).agreement).toBeNull();
+    const m = tasteMatch(horror, comedy, { agreed: 4, total: 4 });
+    expect(m.agreement).toBe(1);
+    expect(m.pct).toBeGreaterThanOrEqual(40);
+  });
+  it("is 0, not NaN, with nothing to compare", () => {
+    expect(tasteMatch({ genres: [], tags: [] }, { genres: [], tags: [] }).pct).toBe(0);
   });
 });

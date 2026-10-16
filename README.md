@@ -18,7 +18,8 @@ Critics and star ratings tell you what reviewers think. Tonight's Pick reads wha
 |---|---|
 | **Look it up:** search a title, see the Real People Score (a green dot with the share who liked it and a red dot with the share who didn't, the Liked / Mixed / Disliked bar, sample size and sources, genre line, what people say with linked quotes), rate it | `/` → `/t/movie/…` |
 | **Ask for a pick:** "something funny, under 2 hours, on Netflix" → 3 unseen picks that meet every constraint, with reasons, where to watch (or "rent only"), plus 2 backups; open **How we picked this** to see every Qloo call | `/pick` |
-| **Pick together (2–5 people):** send one link; everyone joins with the ratings they already have (or rates 5 as a guest), and gets 3 picks the least-excited person still likes, skipping anything anyone has seen or disliked | `/pair` |
+| **Pick together (2–5 people):** send one link; everyone joins with the ratings they already have (or rates 5 as a guest), and gets 3 picks the least-excited person still likes, skipping anything anyone has seen or disliked. Each pair sees their **taste match** ("You & Alex: 78%") and what they both like | `/pair` |
+| **Share:** any set of picks or taste match becomes a link with a text-only preview card for group chats and social apps | `/s/…` |
 | **Ask by voice:** a real MCP server for Alexa+, plus a simulated Alexa+ page in the browser | `/mcp`, `/alexa` |
 | **Profile:** guest-first (no login), liked / seen / want-to-watch lists, "your taste" tags, export and delete | `/me` |
 

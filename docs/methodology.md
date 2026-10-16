@@ -94,6 +94,8 @@ The agent ([`loop.ts`](../apps/api/src/agent/loop.ts)) is Nemotron 3 Super with 
 
 **Group Pick (2–5 people):** everyone joins one link with the profile already on their device (likes, dislikes and seen titles), or rates 5 titles as a guest. Candidates come from everyone together plus each person's own taste (so one strong taste can't take over); each candidate is ranked separately for each person with `qloo_rank` (orders, not scores, since scores from separate calls aren't comparable); we keep the titles with the best **worst** fit (maximize the minimum), breaking ties by the group's average fit. The pick is the one the least-excited person still likes. Titles anyone has seen or disliked are removed. People with no likes yet are left out of the ranking and the answer says so.
 
+**Taste match** (between two people with 3+ likes each, [`tasteMatch`](../packages/scoring/src/index.ts)): a simple, explainable blend. Genre similarity is the cosine of the TMDB genre counts of what each liked; tag similarity is the overlap of the Qloo descriptive tags (`qloo_entity_tags`) of what each liked, as |A∩B| / the smaller set. Match = 55% genre + 45% tags; when they've rated 3+ of the same titles, that blend counts 60% and their agreement rate (both up or both down) 40%. The screen shows what they both like. The weights are a judgment call, not fitted to data.
+
 ## 9. Limits
 
 - People who comment online aren't a random sample of viewers.

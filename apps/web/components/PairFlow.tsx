@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GROUP_MAX, GROUP_MIN, type FinalAnswer, type Pair, type TitleChip } from "@tp/shared";
+import { GROUP_MAX, GROUP_MIN, type FinalAnswer, type GroupMatch, type Pair, type TitleChip } from "@tp/shared";
 import { getJson, postJson } from "@/lib/client";
 import { OnboardingGrid } from "./OnboardingGrid";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
+import { ShareButton } from "./ShareButton";
 
 interface PairInfo {
   pair: Pair;
@@ -25,6 +26,45 @@ function NameField({ value, onChange, id }: { value: string; onChange: (v: strin
       </label>
       <input id={id} value={value} onChange={(e) => onChange(e.target.value)} maxLength={24} autoComplete="given-name" className="h-11 w-full max-w-xs rounded-xl border border-line bg-[var(--bg)] px-3" />
     </div>
+  );
+}
+
+/** "You & Alex: 78% match", for every pair in the group, refreshed when anyone rates more. */
+function TasteMatches({ code, ratingsKey }: { code: string; ratingsKey: string }) {
+  const [data, setData] = useState<GroupMatch | null>(null);
+  useEffect(() => {
+    getJson<GroupMatch>(`/pairs/${code}/match`)
+      .then(setData)
+      .catch(() => setData(null));
+  }, [code, ratingsKey]);
+  if (!data || (data.matches.length === 0 && data.waitingOn.length === 0)) return null;
+  return (
+    <section className="surface space-y-3 rounded-2xl p-5" aria-labelledby="match-h">
+      <h2 id="match-h" className="font-semibold">
+        Taste match
+      </h2>
+      {data.matches.length === 0 && <p className="text-sm text-dim">Once two people have 3 likes each, you&apos;ll see how alike your tastes are.</p>}
+      <ul className="space-y-3">
+        {data.matches.map((m, i) => {
+          const both = [...m.sharedTags, ...m.sharedGenres].slice(0, 3);
+          return (
+            <li key={`${m.a}-${m.b}`} className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p>
+                  <span className="font-medium">
+                    {m.a} &amp; {m.b}
+                  </span>
+                  <span className="font-display tabular ml-2 text-2xl font-bold text-accent">{m.pct}%</span>
+                </p>
+                <p className="text-xs text-dim">{both.length ? `Both like ${both.join(", ")}` : "Not much in common yet"}{m.inCommon >= 3 ? ` · ${m.inCommon} titles rated by both` : ""}</p>
+              </div>
+              {m.includesMe && <ShareButton body={{ kind: "match", code, index: i }} text={`We're a ${m.pct}% movie match on Tonight's Pick`} />}
+            </li>
+          );
+        })}
+      </ul>
+      {data.waitingOn.length > 0 && <p className="text-xs text-faint">{data.waitingOn.join(", ")}: 3 likes needed to be matched.</p>}
+    </section>
   );
 }
 
@@ -201,6 +241,7 @@ export function PairFlow({ code, grid }: { code: string; grid: TitleChip[] }) {
           </button>
         )}
       </section>
+      {pair.joined && <TasteMatches code={code} ratingsKey={pair.members.map((m) => m.ratedCount).join(",")} />}
       <button
         type="button"
         onClick={pick}
@@ -222,6 +263,13 @@ export function PairFlow({ code, grid }: { code: string; grid: TitleChip[] }) {
             </ol>
           ) : (
             <p className="text-dim">{answer.question?.text ?? "No shared picks yet. Rate a few more titles each."}</p>
+          )}
+          {answer.picks.length > 0 && (
+            <ShareButton
+              body={{ kind: "pick", runId: answer.runId, code }}
+              label="Share with the group"
+              text={`Tonight's pick: ${answer.picks[0]!.name}`}
+            />
           )}
           <ProvenanceDrawer runId={answer.runId} note={answer.note} />
         </div>

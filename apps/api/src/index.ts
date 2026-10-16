@@ -14,6 +14,7 @@ import { checkModels } from "./llm/index.ts";
 import { bootQloo, stopQloo } from "./qloo/bridge.ts";
 import { agentRoutes } from "./routes/agent.ts";
 import { pairRoutes } from "./routes/pairs.ts";
+import { shareRoutes } from "./routes/share.ts";
 import { profileRoutes } from "./routes/profile.ts";
 import { systemRoutes } from "./routes/system.ts";
 import { titleRoutes } from "./routes/titles.ts";
@@ -40,6 +41,7 @@ export async function buildApp() {
   await app.register(profileRoutes);
   await app.register(agentRoutes);
   await app.register(pairRoutes);
+  await app.register(shareRoutes);
   await registerMcp(app);
   return app;
 }

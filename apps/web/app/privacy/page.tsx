@@ -13,6 +13,9 @@ export default function Privacy() {
       </p>
       <p>Voice: linking Alexa+ uses a one-time 6-digit code. No names, emails or account IDs pass through.</p>
       <p>
+        Groups and share links: in a Pick together group, the other people see the first name you give (optional) and how many titles you&apos;ve rated and, once you have 3 likes, your taste match with them and the genres and tags you share; never which titles you rated. A share link shows only the picks or the match percentage, with first names people chose to give (otherwise &quot;a friend&quot;). Share links expire after 180 days and are deleted with your profile.
+      </p>
+      <p>
         You can export or delete everything from your <a href="/me" className="text-accent underline">profile page</a> at any time.
       </p>
     </article>

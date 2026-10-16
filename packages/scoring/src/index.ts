@@ -223,6 +223,68 @@ export function capCommunity(up: number, down: number, outsideCounted: number, m
   return { liked, disliked: max - liked };
 }
 
+export interface TasteProfile {
+  /** TMDB genres of the titles this person liked, with repeats (so counts are weights) */
+  genres: readonly string[];
+  /** Qloo descriptive tags shared across their liked titles (top ones first) */
+  tags: readonly string[];
+}
+
+export interface TasteMatch {
+  /** 0-100 */
+  pct: number;
+  genreSim: number;
+  tagSim: number;
+  /** share of titles both rated where they agreed; null with fewer than 3 in common */
+  agreement: number | null;
+  sharedTags: string[];
+  sharedGenres: string[];
+}
+
+function cosine(a: Map<string, number>, b: Map<string, number>): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (const [k, v] of a) {
+    na += v * v;
+    dot += v * (b.get(k) ?? 0);
+  }
+  for (const v of b.values()) nb += v * v;
+  return na && nb ? dot / Math.sqrt(na * nb) : 0;
+}
+
+const counts = (xs: readonly string[]) => {
+  const m = new Map<string, number>();
+  for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1);
+  return m;
+};
+
+/**
+ * Taste match between two people, as a simple, explainable blend:
+ * - genre similarity: cosine of the genre counts of what each liked (TMDB)
+ * - tag similarity: overlap of the Qloo descriptive tags of what each liked (|A∩B| / min size)
+ * - agreement: when they've rated 3+ of the same titles, the share they agreed on (up/up or down/down)
+ * pct = 55% genre + 45% tags; with 3+ titles in common, that blend counts 60% and agreement 40%.
+ */
+export function tasteMatch(a: TasteProfile, b: TasteProfile, common: { agreed: number; total: number } = { agreed: 0, total: 0 }): TasteMatch {
+  const ga = counts(a.genres);
+  const gb = counts(b.genres);
+  const genreSim = cosine(ga, gb);
+  const ta = new Set(a.tags.map((t) => t.toLowerCase()));
+  const tb = new Set(b.tags.map((t) => t.toLowerCase()));
+  const sharedTagKeys = [...ta].filter((t) => tb.has(t));
+  const tagSim = ta.size && tb.size ? sharedTagKeys.length / Math.min(ta.size, tb.size) : 0;
+  const agreement = common.total >= 3 ? common.agreed / common.total : null;
+  const blend = 0.55 * genreSim + 0.45 * tagSim;
+  const score = agreement === null ? blend : 0.6 * blend + 0.4 * agreement;
+  const sharedTags = a.tags.filter((t) => tb.has(t.toLowerCase())).slice(0, 3);
+  const sharedGenres = [...ga.keys()]
+    .filter((g) => gb.has(g))
+    .sort((x, y) => Math.min(ga.get(y)!, gb.get(y)!) - Math.min(ga.get(x)!, gb.get(x)!))
+    .slice(0, 3);
+  return { pct: Math.round(Math.min(1, Math.max(0, score)) * 100), genreSim, tagSim, agreement, sharedTags, sharedGenres };
+}
+
 /** Two-Person Pick: maximize the worse of the two fits; ties broken by the better fit. */
 export function pairFit(fitA: number, fitB: number): { worse: number; better: number } {
   return { worse: Math.min(fitA, fitB), better: Math.max(fitA, fitB) };

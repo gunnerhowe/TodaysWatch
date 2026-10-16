@@ -313,3 +313,15 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+/// A share link's card (group picks or a taste match), snapshotted from real results on the server.
+model ShareCard {
+  id        String   @id // short random code used in /s/<id>
+  kind      String // pick | match
+  data      Json
+  profileId String? // who made it (kept so their data export and delete can include it)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([profileId])
+}

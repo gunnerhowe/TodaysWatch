@@ -242,6 +242,12 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
               const t = state.titles.get(id);
               return pickScore(state.candidates.get(id)?.taste ?? 0.5, t?.genreAdjusted ?? t?.wilsonLow ?? 0, w);
             },
+            canReplace: (newId, oldId) => {
+              // two people: only swap in a title both fit at least about as well
+              const was = state.candidates.get(oldId)?.pairWorse;
+              if (was === undefined) return true;
+              return (state.candidates.get(newId)?.pairWorse ?? -1) >= was - 0.05;
+            },
             why: (id) => {
               const tags = state.candidates.get(id)?.sharedTags ?? [];
               return tags.length ? `A close taste match: ${tags.slice(0, 3).join(", ")}.` : "A close taste match that real viewers rated well.";

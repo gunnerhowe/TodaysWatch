@@ -92,3 +92,21 @@ describe("constraints", () => {
     expect(a.picks.map((p) => p.id)).toEqual(["a", "b", "x"]); // "long" ranks highest but was dropped
   });
 });
+
+describe("pick for two", () => {
+  it("never swaps a compromise pick for a one-sided scored title", () => {
+    // q = A Quiet Place (unscored, both ok: 0.44); m = Midsommar (scored, horror fan only: 0.22)
+    const worse: Record<string, number> = { q: 0.44, m: 0.22, a: 0.56, b: 0.5 };
+    const v = {
+      allowed: new Set(["a", "b", "q", "m"]),
+      excluded: () => false,
+      countedN: (id: string) => (id === "q" ? 0 : 200),
+      rank: () => 1,
+      why: () => "",
+      canReplace: (n: string, o: string) => worse[n]! >= worse[o]! - 0.05,
+    };
+    const a = { intro: "", picks: [pick("a"), pick("b"), pick("q")], backups: [] as { id: string; why: string }[], question: null };
+    promoteScored(a, v);
+    expect(a.picks.map((p) => p.id)).toEqual(["a", "b", "q"]);
+  });
+});

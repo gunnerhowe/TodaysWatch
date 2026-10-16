@@ -60,7 +60,12 @@ export function validateFinal(raw: unknown, v: ValidationView): Verdict {
  */
 export function promoteScored(
   a: FinalArgs,
-  v: ValidationView & { rank: (id: string) => number; why: (id: string) => string },
+  v: ValidationView & {
+    rank: (id: string) => number;
+    why: (id: string) => string;
+    /** may `newId` take `oldId`'s slot? (pick-for-two: never trade a compromise for a one-sided title) */
+    canReplace?: (newId: string, oldId: string) => boolean;
+  },
 ): string[] {
   const inPicks = new Set(a.picks.map((p) => p.id));
   const spare = [...v.allowed]
@@ -70,7 +75,9 @@ export function promoteScored(
   const demoted: { id: string; why: string }[] = [];
   a.picks = a.picks.map((p) => {
     if ((v.countedN(p.id) ?? 0) >= EARLY_MIN || spare.length === 0) return p;
-    const id = spare.shift()!;
+    const at = spare.findIndex((id) => !v.canReplace || v.canReplace(id, p.id));
+    if (at < 0) return p;
+    const id = spare.splice(at, 1)[0]!;
     swapped.push(id);
     demoted.push(p);
     // keep the model's own reason if it had already listed this title as a backup

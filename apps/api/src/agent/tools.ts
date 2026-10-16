@@ -63,6 +63,9 @@ export interface ToolEnv {
 
 type Handler = (args: Record<string, unknown>, e: ToolEnv) => Promise<unknown>;
 
+/** TMDB vote count above which a title counts as well known (for cold-start picks). */
+const WELL_KNOWN_VOTES = 300;
+
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /**
@@ -141,7 +144,14 @@ export const handlers: Record<string, Handler> = {
         if (t && !found.some((f) => f.t.id === t.id)) found.push({ t, taste: rankToTaste(i, ents.length), affinity: ents[i]!.affinity });
       });
     }
-    const kept = found.filter((f) => !state.excluded(f.t.id));
+    let kept = found.filter((f) => !state.excluded(f.t.id));
+    // With little taste to go on, tag-only matches lean niche (a "thrilling" request from a new
+    // listener got three little-known 2022 titles nobody had talked about). Prefer titles enough
+    // people have seen, unless that would leave fewer than 3.
+    if (ctx.liked.length < 3) {
+      const known = kept.filter((f) => (f.t.tmdbVoteCount ?? 0) >= WELL_KNOWN_VOTES);
+      if (known.length >= 3) kept = known;
+    }
     for (const f of kept) state.addCandidate(f.t, { taste: f.taste, origin: "qloo_recommend", sharedTags: [] });
     return {
       status: results.length ? results[0]!.r.status : "empty",

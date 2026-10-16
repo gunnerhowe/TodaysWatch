@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isVague, parseRequest, refersBack } from "./parse.ts";
+import { isFollowUp, isVague, parseRequest, refersBack } from "./parse.ts";
 
 describe("parseRequest", () => {
   it("runtime limits", () => {
@@ -41,5 +41,19 @@ describe("follow-ups that point back at earlier picks", () => {
   });
   it("treats new asks as wanting new titles", () => {
     for (const t of ["Give me more options", "something scarier", "anything else?", "more like that but funnier"]) expect(refersBack(t)).toBe(false);
+  });
+});
+
+describe("follow-ups that build on the last request", () => {
+  it("carries over for short follow-ups", () => {
+    for (const t of ["Give me more options", "Only on Netflix", "Lighter than that", "something else", "anything different?"]) expect(isFollowUp(t)).toBe(true);
+  });
+  it("a new request stands on its own", () => {
+    for (const t of ["something funny", "scary but not gory, under 2 hours", "like Severance"]) expect(isFollowUp(t)).toBe(false);
+  });
+  it("the combined text keeps the earlier vibe and adds the new filter", () => {
+    const p = parseRequest("something funny Only on Netflix");
+    expect(p.vibes).toContain("comedy");
+    expect(p.constraints.services).toEqual(["Netflix"]);
   });
 });

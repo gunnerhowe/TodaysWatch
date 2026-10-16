@@ -7,7 +7,7 @@ import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
 import { buildCards } from "./cards.ts";
 import { applyContext, loadUserContext, settingsConstraints, type UserContext } from "./context.ts";
-import { isVague, parseRequest, refersBack } from "./parse.ts";
+import { isFollowUp, isVague, parseRequest, refersBack } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
 import { enforceConstraints, handlers, TOOL_DEFS, TOOL_LABELS } from "./tools.ts";
@@ -46,7 +46,8 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   emit({ type: "session", sessionId: session.id });
 
   const ctx = await loadUserContext(input.profileId, input.pairId);
-  const parsed = parseRequest(input.message);
+  // "Give me more options" keeps the last request's vibes and filters ("something funny").
+  const parsed = parseRequest(isFollowUp(input.message) ? `${await earlierRequest(session.id)} ${input.message}`.trim() : input.message);
   const includeSeen = input.includeSeen ?? (parsed.includeSeen || ctx.includeSeen);
   const run = await prisma.agentRun.create({ data: { sessionId: session.id, model: agentModel(), toolCalls: [], picks: [] } });
   const state = new TurnState(input.profileId, includeSeen, run.id, input.pairId ?? null);
@@ -137,6 +138,19 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   if (answer.question && !picks.length) emit({ type: "question", question: answer.question, runId: run.id });
   emit({ type: "final", answer });
   return { answer, sessionId: session.id, rejectedFinal: rejected, usedFallbackPlanner: usedFallback, toolCallCount: state.toolCalls.length, finalAccepted };
+}
+
+/** The chat's last real request, joined with any follow-ups after it (up to 3 messages back). */
+async function earlierRequest(sessionId: string): Promise<string> {
+  const rows = await prisma.chatMessage.findMany({ where: { sessionId, role: "user" }, orderBy: { createdAt: "desc" }, take: 3 });
+  const texts: string[] = [];
+  for (const r of rows) {
+    const t = String((r.content as { text?: unknown } | null)?.text ?? "").slice(0, 300);
+    if (!t) continue;
+    texts.unshift(t);
+    if (!isFollowUp(t)) break;
+  }
+  return texts.join(". ");
 }
 
 function summarizeAnswer(a: FinalAnswer): string {

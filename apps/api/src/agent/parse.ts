@@ -58,6 +58,15 @@ export interface ParsedRequest {
  * The message points back at titles already shown ("which of those is shortest?", "the second
  * one", "show me that again"), so they shouldn't be excluded from this turn.
  */
+/**
+ * A follow-up that builds on the last request instead of replacing it ("give me more options",
+ * "lighter than that", "only on Netflix", "something else"), so the earlier request's vibes and
+ * filters carry over.
+ */
+export function isFollowUp(text: string): boolean {
+  return /\b(more|other|others|another|else|different|instead|than that|only on|lighter|darker|shorter|longer|newer|older|similar)\b/i.test(text) && text.trim().split(/\s+/).length <= 8;
+}
+
 export function refersBack(text: string): boolean {
   return /\b(of (those|these|them)|(those|these) (three|3|two|picks|ones|options)|the (first|second|third|last|1st|2nd|3rd) one|that one|this one|(it|that|those|them) again|again)\b/i.test(text);
 }

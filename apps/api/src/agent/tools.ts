@@ -65,6 +65,20 @@ type Handler = (args: Record<string, unknown>, e: ToolEnv) => Promise<unknown>;
 
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
+/**
+ * The ids a tool should work on: the ones the model passed, or, if it passed none, every current
+ * candidate (best taste first). Copying 40 long ids by hand is where models slip; in a live run
+ * the agent passed 4 of 40 and then found nothing scored.
+ */
+function idsOrAll(raw: unknown, state: TurnState): string[] {
+  const given = arr(raw).filter((id) => state.allowed.has(id));
+  if (given.length) return given;
+  return [...state.candidates.values()]
+    .filter((c) => !state.excluded(c.titleId))
+    .sort((x, y) => (y.taste ?? 0) - (x.taste ?? 0))
+    .map((c) => c.titleId);
+}
+
 export const handlers: Record<string, Handler> = {
   async get_user_context(_a, { ctx, state }) {
     for (const t of [...ctx.liked, ...ctx.disliked, ...ctx.seen]) state.titles.set(t.id, t);
@@ -137,7 +151,7 @@ export const handlers: Record<string, Handler> = {
   },
 
   async rank_for_user(a, { state, ctx }) {
-    const ids = arr(a.candidates).filter((id) => state.allowed.has(id));
+    const ids = idsOrAll(a.candidates, state);
     const seeds = arr(a.seeds)
       .map((id) => state.titles.get(id))
       .filter((t): t is Title => !!t);
@@ -176,7 +190,7 @@ export const handlers: Record<string, Handler> = {
   },
 
   async get_scores(a, { state }) {
-    const ids = arr(a.ids).filter((id) => state.allowed.has(id)).slice(0, 40);
+    const ids = idsOrAll(a.ids, state).slice(0, 40);
     const rows = await prisma.title.findMany({ where: { id: { in: ids } } });
     const sizes = await baselineSizes();
     let queued = 0;
@@ -208,7 +222,7 @@ export const handlers: Record<string, Handler> = {
   },
 
   async apply_constraints(a, { state }) {
-    const ids = arr(a.ids).filter((id) => state.allowed.has(id));
+    const ids = idsOrAll(a.ids, state);
     const f: Constraints = {
       maxRuntime: num(a.max_runtime),
       minRuntime: num(a.min_runtime),
@@ -359,15 +373,14 @@ export const TOOL_DEFS: ToolDef[] = [
     description: "Order a shortlist of candidate ids by fit to this person using Qloo's ranking against their liked titles.",
     parameters: {
       type: "object",
-      properties: { candidates: { type: "array", items: { type: "string" }, maxItems: 40 }, seeds: { type: "array", items: { type: "string" }, maxItems: 10 } },
-      required: ["candidates"],
+      properties: { candidates: { type: "array", items: { type: "string" }, maxItems: 40, description: "omit to use all current candidates" }, seeds: { type: "array", items: { type: "string" }, maxItems: 10 } },
       additionalProperties: false,
     },
   },
   {
     name: "get_scores",
     description: "Real People Score for candidate ids: liked %, counted opinions, Early read flag, genre line, and the combined pick_score. Starts scoring for unscored titles (they can only be backups). Results are sorted by pick_score.",
-    parameters: { type: "object", properties: { ids: { type: "array", items: { type: "string" }, maxItems: 40 } }, required: ["ids"], additionalProperties: false },
+    parameters: { type: "object", properties: { ids: { type: "array", items: { type: "string" }, maxItems: 40, description: "omit to use all current candidates" } }, additionalProperties: false },
   },
   {
     name: "apply_constraints",
@@ -375,7 +388,7 @@ export const TOOL_DEFS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        ids: { type: "array", items: { type: "string" }, maxItems: 40 },
+        ids: { type: "array", items: { type: "string" }, maxItems: 40, description: "omit to filter all current candidates" },
         max_runtime: { type: "number" },
         min_runtime: { type: "number" },
         services: { type: "array", items: { type: "string" }, description: "e.g. Netflix, Hulu, Max, Disney Plus" },
@@ -384,7 +397,6 @@ export const TOOL_DEFS: ToolDef[] = [
         max_rating: { type: "string", description: "e.g. PG, PG-13, R, TV-14" },
         type: { type: "string", enum: ["movie", "tv", "any"] },
       },
-      required: ["ids"],
       additionalProperties: false,
     },
   },

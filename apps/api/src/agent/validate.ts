@@ -44,13 +44,19 @@ export function validateFinal(raw: unknown, v: ValidationView): Verdict {
   const seen = ids.filter((id) => v.excluded(id));
   if (seen.length) return { ok: false, reason: `These titles are already seen, rated or disliked by the user: ${seen.join(", ")}. Replace them.` };
 
+  // Scored titles come first. An unscored ("score pending") pick is allowed only to fill the
+  // slots that the scored, unseen candidates from this turn can't.
+  const eligible = [...v.allowed].filter((id) => !v.excluded(id) && (v.countedN(id) ?? 0) >= EARLY_MIN);
   const thin = a.picks.filter((p) => (v.countedN(p.id) ?? 0) < EARLY_MIN).map((p) => p.id);
-  if (thin.length) return { ok: false, reason: `Picks need at least ${EARLY_MIN} counted opinions; these can only be backups: ${thin.join(", ")}. Call get_scores and choose scored titles.` };
+  const scoredPicked = a.picks.length - thin.length;
+  const scoredLeftOut = eligible.filter((id) => !a.picks.some((p) => p.id === id)).length;
+  if (thin.length && scoredLeftOut > 0 && scoredPicked < 3) {
+    return { ok: false, reason: `Use scored titles before unscored ones: ${thin.join(", ")} have under ${EARLY_MIN} counted opinions while ${scoredLeftOut} scored candidate(s) were left out. Call get_scores and pick scored titles first.` };
+  }
 
   if (!hasQuestion && a.picks.length < 3 && v.allowed.size >= 3) {
-    // allowed but fewer than 3 picks: acceptable only when there really aren't enough scored options
-    const eligible = [...v.allowed].filter((id) => !v.excluded(id) && (v.countedN(id) ?? 0) >= EARLY_MIN);
-    if (eligible.length >= 3) return { ok: false, reason: "Give 3 picks; there are enough scored, unseen candidates." };
+    const available = [...v.allowed].filter((id) => !v.excluded(id)).length;
+    if (available >= 3) return { ok: false, reason: "Give 3 picks. Use scored titles first, then the best taste matches (shown as score pending)." };
   }
   return { ok: true, value: a };
 }

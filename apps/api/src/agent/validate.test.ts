@@ -33,9 +33,17 @@ describe("validateFinal", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("unscored titles can only be backups", () => {
+  it("scored titles come before unscored ones", () => {
+    // c and d are scored and were left out, so the unscored e can't be a pick
     expect(validateFinal({ picks: [pick("a"), pick("b"), pick("e")] }, view()).ok).toBe(false);
     expect(validateFinal({ picks: [pick("a"), pick("b"), pick("c")], backups: [pick("e")] }, view()).ok).toBe(true);
+  });
+
+  it("fills with score-pending picks only when too few scored titles exist", () => {
+    const thinCatalog = view({ allowed: new Set(["a", "x", "y", "z"]), countedN: (id) => (id === "a" ? 200 : 0) });
+    expect(validateFinal({ picks: [pick("a"), pick("x"), pick("y")] }, thinCatalog).ok).toBe(true);
+    // but the one scored title must be used
+    expect(validateFinal({ picks: [pick("x"), pick("y"), pick("z")] }, thinCatalog).ok).toBe(false);
   });
 
   it("rejects duplicates", () => {

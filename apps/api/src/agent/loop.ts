@@ -2,6 +2,7 @@ import { EARLY_MIN, pickScore } from "@tp/scoring";
 import type { AgentEvent, FinalAnswer, Question } from "@tp/shared";
 import { env } from "../config.ts";
 import { prisma } from "../db.ts";
+import { enqueueScore } from "../jobs/index.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
 import { buildCards } from "./cards.ts";
@@ -81,6 +82,13 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
 
   emit({ type: "tool", tool: "final_answer", label: TOOL_LABELS.final_answer! });
   const [picks, backups] = await Promise.all([buildCards(state, final.picks), buildCards(state, final.backups)]);
+  const pending = picks.filter((p) => p.scorePending);
+  if (pending.length) {
+    for (const p of pending) await enqueueScore(p.titleId, true).catch(() => false);
+    state.notes.push(
+      `${pending.length === 1 ? "One pick doesn't" : `${pending.length} picks don't`} have a Real People Score yet, so ${pending.length === 1 ? "it's" : "they're"} chosen on taste alone. We've started reading what viewers said; ask again in a few minutes to see the scores.`,
+    );
+  }
   const answer: FinalAnswer = {
     runId: run.id,
     intro: final.intro || (picks.length ? "Here are three picks for tonight." : ""),
@@ -301,8 +309,10 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
     return pickScore(cand?.taste ?? 0.5, rec, w);
   };
   const ordered = eligible.sort((a, b) => scoreOf(b) - scoreOf(a));
-  const top = ordered.slice(0, 3);
-  const backupsPool = [...ordered.slice(3), ...ids.filter((id) => !eligible.includes(id))].slice(0, 2);
+  // scored first; then fill with the best taste matches that have no score yet ("score pending")
+  const unscored = ids.filter((id) => !eligible.includes(id)).sort((a, b) => (state.candidates.get(b)?.taste ?? 0) - (state.candidates.get(a)?.taste ?? 0));
+  const top = [...ordered, ...unscored].slice(0, 3);
+  const backupsPool = [...ordered, ...unscored].filter((id) => !top.includes(id)).slice(0, 2);
   if (top.length) await call("explain_fit", { ids: top });
 
   const why = (id: string) => {

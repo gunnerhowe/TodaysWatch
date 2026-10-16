@@ -22,3 +22,18 @@ describe("why it fits you (only checked facts)", () => {
     expect(groundedWhy({ genres: [] }, { sharedTags: [], perPerson: [{ who: "You", reason: "" }, { who: "Sam", reason: "" }] }, [], [])).toMatch(/least-excited/);
   });
 });
+
+describe("varied examples across cards", () => {
+  it("uses the closest liked title, and a different one on the next card", () => {
+    const likes = [
+      { name: "Modern Family", genres: ["Comedy"] },
+      { name: "Toy Story 5", genres: ["Animation", "Family", "Comedy"] },
+      { name: "The Office", genres: ["Comedy"] },
+    ];
+    const used = new Set<string>();
+    const a = groundedWhy({ genres: ["Animation", "Comedy", "Family"] }, { sharedTags: [] }, likes, ["comedy"], used);
+    const b = groundedWhy({ genres: ["Comedy"] }, { sharedTags: [] }, likes, ["comedy"], used);
+    expect(a).toContain("Toy Story 5");
+    expect(b).not.toContain("Toy Story 5");
+  });
+});

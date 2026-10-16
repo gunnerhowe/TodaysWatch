@@ -33,8 +33,19 @@ const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1
  * they liked. The model's own sentence isn't used: it invented things ("a light-hearted, festive
  * sci-fi thriller" for Disclosure Day).
  */
-export function groundedWhy(t: Pick<Title, "genres">, c: Pick<Candidate, "sharedTags" | "perPerson"> | undefined, liked: Pick<Title, "name" | "genres">[], vibes: string[]): string {
-  const likedLike = liked.filter((l) => l.genres.some((g) => t.genres.includes(g)));
+export function groundedWhy(
+  t: Pick<Title, "genres">,
+  c: Pick<Candidate, "sharedTags" | "perPerson"> | undefined,
+  liked: Pick<Title, "name" | "genres">[],
+  vibes: string[],
+  /** examples already used on other cards, so three cards don't all say "you liked Modern Family" */
+  used: Set<string> = new Set(),
+): string {
+  const overlap = (l: Pick<Title, "genres">) => l.genres.filter((g) => t.genres.includes(g)).length;
+  const likedLike = liked
+    .filter((l) => overlap(l) > 0)
+    .sort((a, b) => Number(used.has(a.name)) - Number(used.has(b.name)) || overlap(b) - overlap(a));
+  if (likedLike[0]) used.add(likedLike[0].name);
   if (c?.perPerson && c.perPerson.length > 1) return "Ranked for each of you; this is one the least-excited person still likes.";
   if (c?.sharedTags.length) return `Shares ${list(c.sharedTags.slice(0, 3).map((x) => x.toLowerCase()))} with titles you've liked${likedLike[0] ? `, like ${likedLike[0].name}` : ""}.`;
   const wanted = new Set(vibes.flatMap((v) => VIBE_GENRE_NAMES[v] ?? []));
@@ -59,6 +70,7 @@ export async function buildCards(state: TurnState, items: { id: string; why: str
   const rows = await prisma.title.findMany({ where: { id: { in: items.map((i) => i.id) } } });
   const sizes = await baselineSizes();
   const cards: PickCard[] = [];
+  const usedExamples = new Set<string>();
   for (const it of items) {
     const t = rows.find((r) => r.id === it.id);
     if (!t) continue;
@@ -71,7 +83,7 @@ export async function buildCards(state: TurnState, items: { id: string; why: str
     const streaming = rentOnly ? all.map((p) => p.name) : subscription;
     const shared = c?.sharedTags ?? [];
     const liked = [...state.likedIds].map((id) => state.titles.get(id)).filter((x): x is Title => !!x);
-    const why = groundedWhy(t, c, liked, state.vibes);
+    const why = groundedWhy(t, c, liked, state.vibes, usedExamples);
     const reception = t.genreAdjusted ?? t.wilsonLow;
     cards.push({
       titleId: t.id,

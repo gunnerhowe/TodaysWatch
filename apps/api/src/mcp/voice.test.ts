@@ -56,3 +56,11 @@ describe("voice rules", () => {
     expect(s).toBe("Scary how? Jump scares, Slow dread, or Gory?");
   });
 });
+
+describe("spoken tags", () => {
+  it("cleans stray punctuation and reads tags naturally (real 'It's Family,.' output)", () => {
+    const s = spokenPick(card({ name: "Shining Vale", sharedTags: ["Family,", "Darkly Comedic"] }), 2);
+    expect(s).toContain("Think family and darkly comedic.");
+    expect(s).not.toMatch(/,\./);
+  });
+});

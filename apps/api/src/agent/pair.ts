@@ -2,7 +2,7 @@ import type { Title } from "@prisma/client";
 import { comparePairFit, pairFit, rankToTaste } from "@tp/scoring";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
-import { descriptiveTags, entitiesOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
+import { descriptiveTags, entitiesOf, tidyTagName, type InsightsType, type QlooResult } from "../qloo/types.ts";
 import type { TurnState } from "./state.ts";
 
 const qType = (k: "MOVIE" | "TV"): InsightsType => (k === "MOVIE" ? "movie" : "tv_show");
@@ -20,7 +20,10 @@ async function ids(state: TurnState, titles: Title[], max: number): Promise<stri
 function namesOf(r: QlooResult | null, max: number): string[] {
   if (!r) return [];
   const res = r.results as Record<string, unknown> | unknown[] | undefined;
-  const pick = (v: unknown) => (Array.isArray(v) ? (v as { name?: string }[]).map((x) => x.name).filter((x): x is string => !!x) : []);
+  const pick = (v: unknown) =>
+    Array.isArray(v)
+      ? [...new Set((v as { name?: string }[]).map((x) => (x.name ? tidyTagName(x.name) : "")).filter(Boolean))]
+      : [];
   if (Array.isArray(res)) return pick(res).slice(0, max);
   if (res && typeof res === "object") {
     for (const k of ["shared", "common", "overlap", "tags", "results", "items"]) {
@@ -62,14 +65,39 @@ export async function pairCandidates(
   const kinds: ("MOVIE" | "TV")[] = type === "movie" ? ["MOVIE"] : type === "tv" ? ["TV"] : ["MOVIE", "TV"];
   const results: { title: Title; fitA: number; fitB: number; posA: number; posB: number; n: number }[] = [];
   for (const kind of kinds) {
-    const rec = await callQloo("qloo_recommend", { target_type: qType(kind), signals: [...aSig, ...bSig], limit: 20 }, state.qlooCtx());
-    const ents = entitiesOf(rec);
-    const titles: Title[] = [];
-    for (const e of ents) {
-      const t = await titleFromEntity(e, kind === "MOVIE" ? "movie" : "tv").catch(() => null);
-      if (t && !state.excluded(t.id) && !titles.some((x) => x.id === t.id)) titles.push(t);
+    // A balanced pool: titles from each person's taste and from both together. Recommending
+    // only from the combined signals let the stronger taste dominate (a horror fan plus a
+    // Paddington 2 fan got three horror picks), and rank positions are relative, so a pool
+    // of one genre always produces a "best fit" for the other person.
+    const recs = await Promise.all([
+      callQloo("qloo_recommend", { target_type: qType(kind), signals: [...aSig, ...bSig], limit: 12 }, state.qlooCtx()),
+      callQloo("qloo_recommend", { target_type: qType(kind), signals: aSig, limit: 8 }, state.qlooCtx()),
+      callQloo("qloo_recommend", { target_type: qType(kind), signals: bSig, limit: 8 }, state.qlooCtx()),
+    ]);
+    const pools: Title[][] = [];
+    for (const rec of recs) {
+      const pool: Title[] = [];
+      for (const e of entitiesOf(rec)) {
+        const t = await titleFromEntity(e, kind === "MOVIE" ? "movie" : "tv").catch(() => null);
+        if (t && !state.excluded(t.id) && !pool.some((x) => x.id === t.id)) pool.push(t);
+      }
+      pools.push(pool);
     }
-    const shortlist = titles.slice(0, 10);
+    // 4 from both together, 3 from each person (qloo_rank takes at most 10 options)
+    const shortlist: Title[] = [];
+    const take = (pool: Title[], n: number) => {
+      for (const t of pool) {
+        if (n <= 0 || shortlist.length >= 10) break;
+        if (!shortlist.some((x) => x.id === t.id)) {
+          shortlist.push(t);
+          n--;
+        }
+      }
+    };
+    take(pools[0] ?? [], 4);
+    take(pools[1] ?? [], 3);
+    take(pools[2] ?? [], 3);
+    for (const pool of pools) take(pool, 10 - shortlist.length);
     if (shortlist.length < 2) {
       shortlist.forEach((t) => results.push({ title: t, fitA: 0.5, fitB: 0.5, posA: 0, posB: 0, n: 1 }));
       continue;

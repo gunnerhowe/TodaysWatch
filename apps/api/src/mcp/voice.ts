@@ -27,7 +27,9 @@ export function spokenScore(s: Pick<Score, "state" | "likedPct" | "countedN">): 
 export function spokenPick(p: PickCard, i: number): string {
   const ord = ["First", "Second", "Third", "Fourth", "Fifth"][i] ?? "Next";
   const year = p.year ? `, from ${p.year}` : "";
-  const why = p.sharedTags.length ? `It's ${p.sharedTags.slice(0, 2).join(" and ")}.` : "";
+  // "Think slow burn and folk horror." Tags are labels, not adjectives, so "It's Family" read badly.
+  const tags = p.sharedTags.map((t) => t.replace(/[,.;:]+$/, "").trim()).filter(Boolean).slice(0, 2);
+  const why = tags.length ? `Think ${tags.join(" and ").toLowerCase()}.` : "";
   return clampWords(`${ord}, ${p.name}${year}: ${spokenScore(p.score)}. ${why}`, 25);
 }
 

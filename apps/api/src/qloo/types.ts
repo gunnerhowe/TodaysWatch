@@ -160,11 +160,13 @@ export function issuesOf(r: QlooResult): ResolutionIssue[] {
  */
 const DESCRIPTIVE_TAG = /^urn:tag:(genre|subgenre|style|archetype|motif|keyword|mood|plot):qloo$/;
 
-function tidy(name: string): string {
-  const n = name.trim();
+/** Trim stray punctuation ("Family," came back from compare_audiences) and fix all-caps names. */
+export function tidyTagName(name: string): string {
+  const n = name.trim().replace(/^[\s,.;:/|-]+|[\s,.;:/|-]+$/g, "");
   // "DEATH" -> "Death"; leave mixed-case names ("Avant-Garde", "'80s") alone
   return n === n.toUpperCase() && /[A-Z]{2,}/.test(n) ? n.charAt(0) + n.slice(1).toLowerCase() : n;
 }
+const tidy = tidyTagName;
 
 /** Descriptive tags only, tidied and de-duplicated (case-insensitive), in Qloo's order. */
 export function descriptiveTags(r: QlooResult): QlooTag[] {

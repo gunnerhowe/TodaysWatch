@@ -37,3 +37,10 @@ describe("varied examples across cards", () => {
     expect(b).not.toContain("Toy Story 5");
   });
 });
+
+describe("only close examples", () => {
+  it("doesn't name a liked title that shares just one genre", () => {
+    const why = groundedWhy({ genres: ["Comedy", "Romance", "Drama"] }, { sharedTags: [] }, [{ name: "Moana", genres: ["Animation", "Family", "Comedy"] }], ["comedy"]);
+    expect(why).toBe("A comedy pick, as you asked.");
+  });
+});

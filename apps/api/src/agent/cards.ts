@@ -42,8 +42,10 @@ export function groundedWhy(
   used: Set<string> = new Set(),
 ): string {
   const overlap = (l: Pick<Title, "genres">) => l.genres.filter((g) => t.genres.includes(g)).length;
+  // Name a liked title only when it's genuinely close (2+ genres in common): "you liked Moana"
+  // on Forgetting Sarah Marshall (only "comedy" in common) implied a likeness that isn't there.
   const likedLike = liked
-    .filter((l) => overlap(l) > 0)
+    .filter((l) => overlap(l) >= Math.min(2, t.genres.length))
     .sort((a, b) => Number(used.has(a.name)) - Number(used.has(b.name)) || overlap(b) - overlap(a));
   if (likedLike[0]) used.add(likedLike[0].name);
   if (c?.perPerson && c.perPerson.length > 1) return "Ranked for each of you; this is one the least-excited person still likes.";

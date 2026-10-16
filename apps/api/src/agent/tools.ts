@@ -161,6 +161,11 @@ export const handlers: Record<string, Handler> = {
       });
     }
     let kept = found.filter((f) => !state.excluded(f.t.id));
+    // Kids' and animated titles only when asked for, or when this person likes them: a new
+    // user's "something funny" got The Swan Princess and My Little Pony from tag matches.
+    const kidsOk =
+      state.vibes.some((v) => v === "family" || v === "animation") || !!state.constraints.maxRating || ctx.liked.some((t) => t.genres.some((g) => KIDS_GENRES.has(g)));
+    if (!kidsOk) kept = kept.filter((f) => !f.t.genres.some((g) => KIDS_GENRES.has(g)));
     // With little taste to go on, tag-only matches lean niche (a "thrilling" request from a new
     // listener got three little-known 2022 titles nobody had talked about). Prefer titles enough
     // people have seen, unless that would leave fewer than 3.
@@ -432,6 +437,9 @@ export async function violates(t: Title, f: Constraints): Promise<string | null>
   }
   return null;
 }
+
+/** TMDB genres for kids' and animated titles (movie and TV names). */
+const KIDS_GENRES = new Set(["Animation", "Family", "Kids"]);
 
 export const TOOL_LABELS: Record<string, string> = {
   get_user_context: "Reading your ratings",

@@ -7,6 +7,7 @@ const ctx = (settings: Partial<ReturnType<typeof SettingsZ.parse>>): UserContext
   disliked: [],
   seen: [],
   wantToWatch: [],
+  notInterested: [],
   includeSeen: false,
   settings: SettingsZ.parse(settings),
   groupMembers: [],

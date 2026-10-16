@@ -88,6 +88,8 @@ export const RatingRequestZ = z.object({
   value: z.enum(["UP", "DOWN"]).nullable().optional(),
   seen: z.boolean().optional(),
   wantToWatch: z.boolean().optional(),
+  /** "Not this one" on a pick: keep it out of future picks (not a thumbs down) */
+  notInterested: z.boolean().optional(),
 });
 export type RatingRequest = z.infer<typeof RatingRequestZ>;
 

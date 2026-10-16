@@ -362,10 +362,10 @@ export const handlers: Record<string, Handler> = {
   async pair_pick(a, { state, ctx }) {
     // Everyone in the group brings their own profile: likes seed and rank the picks, and
     // anything anyone has seen or disliked is left out.
-    const people: GroupPerson[] = [{ who: "You", liked: ctx.liked, seen: ctx.seen, disliked: ctx.disliked }];
+    const people: GroupPerson[] = [{ who: "You", liked: ctx.liked, seen: ctx.seen, disliked: [...ctx.disliked, ...ctx.notInterested] }];
     for (const m of ctx.groupMembers.slice(0, GROUP_MAX - 1)) {
       const mctx = await loadUserContext(m.profileId, state.pairId);
-      people.push({ who: m.label, liked: mctx.liked, seen: mctx.seen, disliked: mctx.disliked });
+      people.push({ who: m.label, liked: mctx.liked, seen: mctx.seen, disliked: [...mctx.disliked, ...mctx.notInterested] });
     }
     // Titles someone named out loud ("my partner loves Ted Lasso"). Qloo signals must be entity
     // IDs, so resolve each name through TMDB the same way recommend_titles does.

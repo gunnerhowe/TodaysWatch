@@ -38,6 +38,8 @@ const EnvZ = z.object({
   COMMUNITY_MIN_RATINGS: num(3),
   COMMUNITY_MAX_SHARE: num(0.25),
   LLM_MAX_CONCURRENCY: num(6), // model calls in flight across the whole server
+  // Nemotron's reasoning mode for the agent's steps (AGENT_REASONING=false turns it off).
+  AGENT_REASONING: bool(true),
   CLASSIFIER_REVIEW_MODEL: opt, // defaults to LLM_AGENT_MODEL; "none" disables the second opinion
   // RoBERTa needs ~750 MB; on a 1 GB host it gets the API killed, so it only runs when asked for
   ALLOW_ROBERTA_FALLBACK: bool(false),

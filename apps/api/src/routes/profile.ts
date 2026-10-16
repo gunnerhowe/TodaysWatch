@@ -19,20 +19,21 @@ export async function profileRoutes(app: FastifyInstance) {
     const profile = await profileFor(req.caller.profileToken);
     const title = await prisma.title.findUnique({ where: { id: body.data.titleId }, select: { id: true } });
     if (!title) return reply.code(404).send({ error: "unknown title" });
-    const { value, seen, wantToWatch } = body.data;
+    const { value, seen, wantToWatch, notInterested } = body.data;
     const data = {
       ...(value !== undefined ? { value } : {}),
+      ...(notInterested !== undefined ? { notInterested } : {}),
       // a thumbs rating implies you watched it
       ...(seen !== undefined ? { seen } : value ? { seen: true } : {}),
       ...(wantToWatch !== undefined ? { wantToWatch } : {}),
     };
     const r = await prisma.rating.upsert({
       where: { profileId_titleId: { profileId: profile.id, titleId: title.id } },
-      create: { profileId: profile.id, titleId: title.id, value: value ?? null, seen: data.seen ?? false, wantToWatch: wantToWatch ?? false },
+      create: { profileId: profile.id, titleId: title.id, value: value ?? null, seen: data.seen ?? false, wantToWatch: wantToWatch ?? false, notInterested: notInterested ?? false },
       update: data,
     });
     // fully cleared ratings are removed, so "undo" leaves no trace
-    if (!r.value && !r.seen && !r.wantToWatch) await prisma.rating.delete({ where: { profileId_titleId: { profileId: profile.id, titleId: title.id } } });
+    if (!r.value && !r.seen && !r.wantToWatch && !r.notInterested) await prisma.rating.delete({ where: { profileId_titleId: { profileId: profile.id, titleId: title.id } } });
     if (r.value === "UP") void ensureQlooEntity(await prisma.title.findUniqueOrThrow({ where: { id: title.id } })).catch(() => {});
     if (value !== undefined) ratingChanged(title.id); // our users' thumbs count in the score
     return { rating: { titleId: r.titleId, value: r.value, seen: r.seen, wantToWatch: r.wantToWatch } };

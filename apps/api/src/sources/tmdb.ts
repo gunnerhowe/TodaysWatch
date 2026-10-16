@@ -244,6 +244,9 @@ export async function discoverForRequest(
     certification_country: kind === "movie" && opts.maxRating ? "US" : undefined,
     "certification.lte": kind === "movie" && opts.maxRating ? opts.maxRating : undefined,
     with_genres: genres.length ? genres.join("|") : undefined, // any of the vibes
+    // Unless they asked for family, kids or animation, leave those out: the most popular
+    // comedies are currently kids' films, so "something funny" got Minions and Hoppers.
+    without_genres: opts.vibes.some((v) => v === "family" || v === "animation") || opts.maxRating ? undefined : kind === "movie" ? "16,10751" : "16,10751,10762",
     "with_runtime.lte": opts.maxRuntime,
     with_watch_providers: providers.length ? providers.join("|") : undefined,
     watch_region: providers.length ? "US" : undefined,

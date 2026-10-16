@@ -8,6 +8,8 @@ export interface UserContext {
   disliked: Title[];
   seen: Title[];
   wantToWatch: Title[];
+  /** "Not this one" titles: never picked again */
+  notInterested: Title[];
   includeSeen: boolean;
   settings: Settings;
   /** the other people in this pick-together group (2-5 people), with the label the group sees */
@@ -42,6 +44,7 @@ export async function loadUserContext(profileId: string, pairId?: string | null)
     disliked: ratings.filter((r) => r.value === "DOWN").map((r) => r.title),
     seen: ratings.filter((r) => r.seen || r.value !== null).map((r) => r.title),
     wantToWatch: ratings.filter((r) => r.wantToWatch).map((r) => r.title),
+    notInterested: ratings.filter((r) => r.notInterested).map((r) => r.title),
     includeSeen: settings.includeSeen,
     settings,
     groupMembers,
@@ -53,7 +56,7 @@ export function applyContext(state: TurnState, ctx: UserContext) {
     state.likedIds.add(t.id);
     state.titles.set(t.id, t); // for "why it fits you" (you liked …)
   }
-  for (const t of ctx.disliked) state.dislikedIds.add(t.id);
+  for (const t of [...ctx.disliked, ...ctx.notInterested]) state.dislikedIds.add(t.id);
   for (const t of ctx.seen) state.seenIds.add(t.id);
 }
 

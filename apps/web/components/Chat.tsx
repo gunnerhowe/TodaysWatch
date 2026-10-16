@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { STARTER_CHIPS, type AgentEvent, type FinalAnswer, type PickCard as Card, type Rating } from "@tp/shared";
-import { readSse, streamToken } from "@/lib/client";
+import { postJson, readSse, streamToken } from "@/lib/client";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
 import { ShareButton } from "./ShareButton";
@@ -131,12 +131,16 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turnCount]);
 
-  const notThis = (turnId: number, idx: number) =>
+  const notThis = (turnId: number, idx: number) => {
+    // tell the server too, so this title stays out of future picks (it isn't a thumbs down)
+    const id = turns.find((t) => t.id === turnId)?.picks[idx]?.titleId;
+    if (id) void postJson("/ratings", { titleId: id, notInterested: true }).catch(() => {});
     patch(turnId, (t) => {
       if (!t.backups.length) return { ...t, picks: t.picks.filter((_, i) => i !== idx) };
       const [next, ...rest] = t.backups;
       return { ...t, picks: t.picks.map((p, i) => (i === idx ? next! : p)), backups: rest };
     });
+  };
 
   return (
     <div className="space-y-6">

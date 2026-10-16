@@ -238,6 +238,7 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
       toolChoice: budgetLeft > 0 ? "auto" : { name: "final_answer" },
       temperature: 0.2,
       maxTokens: 2000,
+      noReasoning: !env.AGENT_REASONING,
     });
     usage.in += res.usage.inputTokens;
     usage.out += res.usage.outputTokens;

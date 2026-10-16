@@ -159,6 +159,7 @@ model Rating {
   value       RatingValue?
   seen        Boolean      @default(false)
   wantToWatch Boolean      @default(false)
+  notInterested Boolean    @default(false) // "Not this one": never pick it again (not a thumbs down)
   updatedAt   DateTime     @updatedAt
 
   @@id([profileId, titleId])

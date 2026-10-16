@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { PickCard as Card, Rating } from "@tp/shared";
 import { runtime, titleHref } from "@/lib/format";
 import { Poster } from "./Poster";
+import { LiveScoreChip } from "./LiveScoreChip";
 import { ScoreChip } from "./Score";
 import { ThumbControls } from "./ThumbControls";
 
@@ -38,7 +39,14 @@ export function PickCard({
           <p className="text-xs text-faint">{[card.year, card.type === "tv" ? "TV" : "Movie", runtime(card.runtimeMin)].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {card.scorePending ? <span className="rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs text-faint">Score pending</span> : <ScoreChip score={s} />}
+          {card.scorePending ? (
+            // keeps checking, and shows the dots as soon as the score lands
+            <LiveScoreChip
+              t={{ id: card.titleId, tmdbId: card.tmdbId, type: card.type, name: card.name, year: card.year, posterPath: card.posterPath, genres: [], score: { ...s, state: "PENDING" } }}
+            />
+          ) : (
+            <ScoreChip score={s} />
+          )}
           {s.countedN > 0 && !card.scorePending && <span className="tabular text-xs text-faint">{s.countedN} opinions</span>}
         </div>
         {s.genreLine && (

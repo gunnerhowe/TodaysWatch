@@ -1,12 +1,14 @@
 # Product feedback (Amazon entry, required)
 
-Feedback on every tool and API used. Fill in from the friction log before submitting on Oct 22; each entry should say what worked, what didn't, and one concrete suggestion.
+Feedback on every tool and API this project uses. Details and dates are in the [friction log](friction-log.md).
 
 | Tool / API | Used for | What worked | What was hard | Suggestion |
 |---|---|---|---|---|
-| Alexa+ (real device or connection to a self-hosted MCP server) | Voice entry point | _tbd_ | _tbd: say plainly whether we connected a real device or used only the simulated `/alexa` page_ | _tbd_ |
-| MCP TypeScript SDK | `/mcp` server (Streamable HTTP, 2025-11-25) and the `/alexa` browser client | Protocol negotiation and session handling worked out of the box | Integrating with Fastify (hijack, CORS headers) | Document non-Express server integration |
-| MCP Inspector | Done-when check for F9 | _tbd_ | _tbd_ | _tbd_ |
-| Qloo harness | Taste tools | Keyless schema discovery; structured statuses | Untyped `results` payload | Publish result payload schemas per tool |
-| Nebius Token Factory | Nemotron 3 Super (agent), Nano (classifier) | _tbd_ | _tbd_ | _tbd_ |
-| TMDB, YouTube Data API, Bluesky | Data | _tbd_ | _tbd_ | _tbd_ |
+| **Alexa+** | Voice entry point, through our self-hosted MCP server at `/mcp` | The MCP route means one server serves the web demo and voice with the same five tools. | We have no Alexa+ device, so the demo uses the simulated Alexa+ page (`/alexa`), as the rules allow. Not tested on a real device. | A browser-based Alexa+ simulator that can call a self-hosted MCP server, so builders without a device can test the real assistant. |
+| **MCP TypeScript SDK 1.32.1** | `/mcp` server (Streamable HTTP, protocol 2025-11-25) and the `/alexa` browser client | Protocol negotiation, sessions and structured tool results worked out of the box. | Integrating with Fastify: `reply.hijack()` before handing over the raw request, and copying CORS headers to the raw response (including `mcp-session-id` in expose-headers for browsers). | Document non-Express servers, and note the CORS headers a browser client needs. |
+| **MCP Inspector 2.11.0** | Verifying `/mcp` | CLI mode with `--header` for bearer auth; `tools/list` and `tools/call` worked first time. | Nothing notable. | — |
+| **Qloo harness (`@qloo/qloo-harness` 0.1.26)** | Taste: tags, recommend, rank, entity tags, trends, compare audiences, title search | Keyless schema discovery; consistent status envelope (`ok`, `needs_input`, …); excellent results from entity signals. | Hackathon server needed both `QLOO_BASE_URL` and `QLOO_TRUSTED_BASE_URL`, and the trust error only showed as "Connection closed" over MCP. Tag-only recommendations lean obscure; entity tags mix in brand/music/audience tags. | Put the base-URL setup in the access email; report trust errors over MCP; expose popularity filters and tag-type filters. |
+| **Nebius Token Factory** (Nemotron 3 Super, Nemotron 3 Nano) | Agent tool calling, opinion classification, second opinion, summaries | OpenAI-compatible API; reliable tool calling with Super; Nano is fast and cheap for batch labelling. | Exact model IDs weren't obvious; reasoning tokens dominate cost when enabled. | Show exact model IDs next to model names; report reasoning tokens separately in `usage`. |
+| **TMDB API** | Search, details, watch providers, reviews, discover | Fast, generous, great data; `discover` filters (genre, runtime, provider, vote count) are exactly what a recommender needs. | — | — |
+| **YouTube Data API v3** | Comments on review and reaction videos | Clear quota costs. | An invalid key returns `badRequest` "API key not valid", which is clear once surfaced. | — |
+| **Bluesky (AT Protocol)** | Public post search | Free, simple app-password login. | A handle entered with a leading `@` is treated as an email address ("local part cannot be empty"). Search matches words, so everyday-word titles ("The Office") need relevance filtering. | Accept `@handle` at login. |

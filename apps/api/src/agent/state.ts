@@ -33,6 +33,8 @@ export interface Constraints {
   originalLanguage?: string;
   /** with services from the profile, rent/buy-only titles are fine too (never for "on Netflix" requests) */
   rentalsOk?: boolean;
+  /** subjects every pick must be about, as TMDB keyword ids ("halloween" -> 3335, 232795…) */
+  topics?: { label: string; ids: number[] }[];
 }
 
 /** Everything the server knows about one agent turn. The validator reads `allowed`. */

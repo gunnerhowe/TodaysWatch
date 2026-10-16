@@ -92,6 +92,8 @@ The agent ([`loop.ts`](../apps/api/src/agent/loop.ts)) is Nemotron 3 Super with 
 
 **`final_answer` is checked in code** ([`validate.ts`](../apps/api/src/agent/validate.ts)): every pick and backup ID must have appeared in a tool result during this turn; no seen, rated or disliked titles unless the user opted in; picks need 50+ counted opinions (unscored titles may only be backups). A rejected answer gets the reason and one retry. If the model still fails, is over its cap, or is unavailable, the server runs the same default plan itself with the same tools, and the answer says so. Either way, an invented or already-seen pick can't reach the user.
 
+**Topics:** subjects in a request ("about Halloween", "set in space", "a Christmas comedy") are matched to TMDB keywords, used to search TMDB discover, and enforced by the server check: every pick must carry the keyword. A topic we can't match to a keyword is said so in the answer. The intro above the picks is built by the server from what's true of them (enforced filters, and a mood word only if every pick has a matching genre).
+
 **Reception floor:** a scored title is never picked if under 50% of viewers liked it and it's in the bottom 30% of its genre (or has no genre comparison). The genre check keeps divisive titles that are good for their genre, like many horror films.
 
 **"Why it fits you" is built by the server from checked facts**, not written by the model: Qloo tags the title genuinely shares with your liked titles (from `qloo_entity_tags`), else the genres that match what you asked for, else genres shared with a title you liked. When a model wrote it, it invented vibes ("a light-hearted, festive sci-fi thriller").

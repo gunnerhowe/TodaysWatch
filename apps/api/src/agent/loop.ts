@@ -1,12 +1,13 @@
 import { EARLY_MIN, pickScore } from "@tp/scoring";
-import type { AgentEvent, FinalAnswer, Question } from "@tp/shared";
+import { LANGUAGES, type AgentEvent, type FinalAnswer, type Question } from "@tp/shared";
 import { env } from "../config.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
-import { buildCards } from "./cards.ts";
+import { buildCards, groundedIntro } from "./cards.ts";
 import { applyContext, loadUserContext, settingsConstraints, type UserContext } from "./context.ts";
+import { keywordIds } from "../sources/tmdb.ts";
 import { isFollowUp, isVague, parseRequest, refersBack } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
@@ -57,6 +58,13 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   // the profile's language and streaming services (combined across a group) apply by default
   Object.assign(state.constraints, await settingsConstraints(ctx, parsed.constraints, state.pairId ? ctx.groupMembers.map((m) => m.profileId) : []));
   state.vibes = parsed.vibes;
+  // Topics ("about Halloween") become a constraint every pick must meet, via TMDB keywords.
+  if (parsed.topics.length) {
+    const resolved = await Promise.all(parsed.topics.map(async (label) => ({ label, ids: (await keywordIds(label).catch(() => [])).map((k) => k.id) })));
+    const known = resolved.filter((r) => r.ids.length);
+    if (known.length) state.constraints.topics = known;
+    for (const r of resolved.filter((x) => !x.ids.length)) state.notes.push(`We couldn't match "${r.label}" to a topic we can check, so the picks may not all be about it.`);
+  }
   // Follow-ups ("give me more options") shouldn't repeat what this chat already offered,
   // unless the person is pointing back at those titles.
   if (!refersBack(input.message)) {
@@ -106,7 +114,14 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   }
   const answer: FinalAnswer = {
     runId: run.id,
-    intro: final.intro || (picks.length ? "Here are three picks for tonight." : ""),
+    // built from what's true of the picks, not the model's sentence (which over-claimed)
+    intro: groundedIntro(
+      picks.map((p) => ({ genres: state.titles.get(p.titleId)?.genres ?? [] })),
+      state.constraints,
+      state.vibes,
+      LANGUAGES.find((l) => l.code === state.constraints.originalLanguage)?.label,
+      state.pairId ? ctx.groupMembers.length + 1 : 1,
+    ),
     picks,
     backups,
     question: (final.question as Question | null | undefined) ?? null,

@@ -27,11 +27,16 @@ const VIBE_GENRE_NAMES: Record<string, string[]> = {
 
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
+const OCCASIONS = new Set(["halloween", "christmas", "thanksgiving", "easter", "hanukkah", "valentine's day", "new year's eve", "independence day"]);
+/** "halloween" -> "Halloween"; other topics stay as typed ("dinosaurs"). */
+export const topicName = (t: string) => (OCCASIONS.has(t) ? t.replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : t);
+const an = (w: string) => (/^[aeiou]/i.test(w) ? "An" : "A");
+
 /**
- * "Why it fits you", built only from facts the server checked: Qloo tags genuinely shared with
- * the person's likes, the genres that match what they asked for, or genres shared with a title
- * they liked. The model's own sentence isn't used: it invented things ("a light-hearted, festive
- * sci-fi thriller" for Disclosure Day).
+ * "Why it fits you", built only from facts the server checked: the topic it was verified to be
+ * about, the requested genres it has, Qloo tags genuinely shared with the person's likes, or a
+ * liked title that's genuinely close. The model's own sentence isn't used: it invented things
+ * ("a light-hearted, festive sci-fi thriller" for Disclosure Day).
  */
 export function groundedWhy(
   t: Pick<Title, "genres"> & { type?: Title["type"] },
@@ -40,35 +45,77 @@ export function groundedWhy(
   vibes: string[],
   /** examples already used on other cards, so three cards don't all say "you liked Modern Family" */
   used: Set<string> = new Set(),
+  /** topics every pick was checked to be about ("halloween") */
+  topics: string[] = [],
 ): string {
   const overlap = (l: Pick<Title, "genres">) => l.genres.filter((g) => t.genres.includes(g)).length;
   // Close enough to name: 2+ genres in common, or the same kind (show/movie) with no genres the
   // pick lacks. Kim's Convenience ("Comedy") may mention Modern Family, never Moana.
   const close = (l: Pick<Title, "genres"> & { type?: Title["type"] }) =>
     overlap(l) >= 2 || (!!t.type && l.type === t.type && l.genres.length > 0 && l.genres.every((g) => t.genres.includes(g)));
-  // Name a liked title only when it's genuinely close (2+ genres in common): "you liked Moana"
-  // on Forgetting Sarah Marshall (only "comedy" in common) implied a likeness that isn't there.
-  const likedLike = liked
-    .filter(close)
-    .sort((a, b) => Number(used.has(a.name)) - Number(used.has(b.name)) || overlap(b) - overlap(a));
+  const likedLike = liked.filter(close).sort((a, b) => Number(used.has(a.name)) - Number(used.has(b.name)) || overlap(b) - overlap(a));
   if (likedLike[0]) used.add(likedLike[0].name);
   if (c?.perPerson && c.perPerson.length > 1) return "Ranked for each of you; this is one the least-excited person still likes.";
-  if (c?.sharedTags.length) return `Shares ${list(c.sharedTags.slice(0, 3).map((x) => x.toLowerCase()))} with titles you've liked${likedLike[0] ? `, like ${likedLike[0].name}` : ""}.`;
+
   const wanted = new Set(vibes.flatMap((v) => VIBE_GENRE_NAMES[v] ?? []));
-  const matched = t.genres.filter((g) => wanted.has(g));
-  if (matched.length) return `${/^[aeiou]/i.test(matched[0]!) ? "An" : "A"} ${list(matched.slice(0, 2).map((g) => g.toLowerCase()))} pick, as you asked${likedLike[0] ? `; you liked ${likedLike[0].name}` : ""}.`;
+  const matched = t.genres.filter((g) => wanted.has(g)).slice(0, 2).map((g) => g.toLowerCase());
+  const about = topics.length ? ` about ${list(topics.map(topicName))}` : "";
+  const extra = c?.sharedTags.length
+    ? `; it shares ${list(c.sharedTags.slice(0, 2).map((x) => x.toLowerCase()))} with titles you've liked`
+    : likedLike[0]
+      ? `; you liked ${likedLike[0].name}`
+      : "";
+  if (matched.length || about) {
+    const kind = matched.length ? `${list(matched)} pick` : "pick";
+    return `${an(kind)} ${kind}${about}, as you asked${extra}.`;
+  }
+  if (c?.sharedTags.length) return `Shares ${list(c.sharedTags.slice(0, 3).map((x) => x.toLowerCase()))} with titles you've liked${likedLike[0] ? `, like ${likedLike[0].name}` : ""}.`;
   if (likedLike.length) return `${list(t.genres.filter((g) => likedLike[0]!.genres.includes(g)).slice(0, 2))}, like ${list(likedLike.slice(0, 2).map((l) => l.name))}, which you liked.`;
   return "A close Qloo taste match for what you asked.";
 }
 
-/** Strip URLs and markup a model might put in a reason line. */
-export function cleanWhy(s: string): string {
-  return s
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/[<>*_`#]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 240);
+const VIBE_WORDS: Record<string, string> = {
+  comedy: "funny",
+  horror: "scary",
+  thriller: "tense",
+  "slow burn": "slow-burn",
+  "feel good": "feel-good",
+  romance: "romantic",
+  "mind-bending": "mind-bending",
+  "science fiction": "sci-fi",
+  action: "action",
+  documentary: "documentary",
+  animation: "animated",
+  emotional: "emotional",
+  family: "family-friendly",
+  mystery: "mystery",
+};
+
+/**
+ * The line above the picks, built from what's true of them: enforced filters (topic, type,
+ * runtime, services, rating, language) and a mood word only if every pick has a matching genre.
+ * The model's intro claimed "three Halloween-themed movies" when two weren't.
+ */
+export function groundedIntro(
+  picks: { genres: string[] }[],
+  f: { type?: string; maxRuntime?: number; services?: string[]; maxRating?: string; originalLanguage?: string; topics?: { label: string }[] },
+  vibes: string[],
+  languageName?: string,
+  groupSize = 1,
+): string {
+  const n = picks.length;
+  if (!n) return "";
+  const moods = vibes.filter((v) => VIBE_WORDS[v] && picks.every((p) => p.genres.some((g) => (VIBE_GENRE_NAMES[v] ?? []).includes(g)))).map((v) => VIBE_WORDS[v]!);
+  const noun = f.type === "movie" ? (n === 1 ? "movie" : "movies") : f.type === "tv" ? (n === 1 ? "show" : "shows") : n === 1 ? "pick" : "picks";
+  const topics = f.topics?.length ? ` about ${list(f.topics.map((x) => topicName(x.label)))}` : "";
+  const tail: string[] = [];
+  if (f.maxRuntime) tail.push(f.maxRuntime % 60 === 0 ? `under ${f.maxRuntime / 60} hour${f.maxRuntime === 60 ? "" : "s"}` : `under ${f.maxRuntime} minutes`);
+  if (f.services?.length) tail.push(`on ${f.services.length > 3 ? "your services" : f.services.join(" or ")}`);
+  if (f.maxRating) tail.push(`rated ${f.maxRating} or under`);
+  if (f.originalLanguage && languageName) tail.push(`originally in ${languageName}`);
+  const who = groupSize > 2 ? ` for all ${groupSize} of you` : groupSize === 2 ? " for both of you" : "";
+  const head = `${n === 1 ? "Here's" : "Here are"} ${n} ${moods.length ? `${list(moods)} ` : ""}${noun}${topics}${who}`;
+  return `${head}${tail.length ? `, ${list(tail)}` : ""}.`;
 }
 
 export async function buildCards(state: TurnState, items: { id: string; why: string }[]): Promise<PickCard[]> {
@@ -89,7 +136,7 @@ export async function buildCards(state: TurnState, items: { id: string; why: str
     const streaming = rentOnly ? all.map((p) => p.name) : subscription;
     const shared = c?.sharedTags ?? [];
     const liked = [...state.likedIds].map((id) => state.titles.get(id)).filter((x): x is Title => !!x);
-    const why = groundedWhy(t, c, liked, state.vibes, usedExamples);
+    const why = groundedWhy(t, c, liked, state.vibes, usedExamples, state.constraints.topics?.map((x) => x.label) ?? []);
     const reception = t.genreAdjusted ?? t.wilsonLow;
     cards.push({
       titleId: t.id,

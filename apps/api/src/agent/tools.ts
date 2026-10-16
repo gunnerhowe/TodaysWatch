@@ -7,7 +7,7 @@ import type { ToolDef } from "../llm/index.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
 import { descriptiveTags, entitiesOf, issuesOf, tagsOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
-import { discoverForRequest, getDetails, getProviders, normTitle, searchTitles, WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
+import { discoverForRequest, getDetails, getProviders, normTitle, searchTitles, titleKeywords, WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
 import { baselineSizes, genreLine, isStale, typeToKind, upsertTitle } from "../titles.ts";
 import { loadUserContext, type UserContext } from "./context.ts";
 import { GROUP_MAX } from "@tp/shared";
@@ -177,10 +177,11 @@ export const handlers: Record<string, Handler> = {
     const kindsWanted: ("movie" | "tv")[] =
       type === "movie" ? ["movie"] : type === "tv" ? ["tv"] : f.type === "movie" || f.type === "tv" ? [f.type] : ["movie", "tv"];
     const extra: Title[] = [];
-    if (state.vibes.length || f.services?.length || f.maxRuntime) {
+    if (state.vibes.length || f.services?.length || f.maxRuntime || f.topics?.length) {
       for (const kind of kindsWanted) {
-        const list = await discoverForRequest(kind, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.rentalsOk ? undefined : f.services, yearMin: f.yearMin, yearMax: f.yearMax, originalLanguage: f.originalLanguage }).catch(() => []);
-        const titles = await mapLimit(list.slice(0, 12), 6, (d) => upsertTitle(kind, d.tmdbId).catch(() => null));
+        const list = await discoverForRequest(kind, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.rentalsOk ? undefined : f.services, yearMin: f.yearMin, yearMax: f.yearMax, originalLanguage: f.originalLanguage, keywordIds: f.topics?.flatMap((x) => x.ids), maxRating: f.maxRating }).catch(() => []);
+        // a topic ("halloween") is a hard filter Qloo's matches rarely meet, so take more from TMDB
+        const titles = await mapLimit(list.slice(0, f.topics?.length ? 20 : 12), 6, (d) => upsertTitle(kind, d.tmdbId).catch(() => null));
         for (const t of titles)
           if (t && !state.excluded(t.id) && !kept.some((k) => k.t.id === t.id) && !extra.some((x) => x.id === t.id)) extra.push(t);
       }
@@ -410,6 +411,14 @@ export async function violates(t: Title, f: Constraints): Promise<string | null>
     const max = RATING_ORDER.indexOf(f.maxRating.toUpperCase());
     if (cert && max >= 0 && RATING_ORDER.indexOf(cert) > max) return `rated ${cert}`;
   }
+  if (f.topics?.length) {
+    const kws = await titleKeywords(typeToKind(t.type), t.tmdbId).catch(() => null);
+    for (const topic of f.topics) {
+      const singular = topic.label.replace(/s$/, "");
+      const about = !!kws && kws.some((k) => topic.ids.includes(k.id) || k.name === topic.label || k.name === singular);
+      if (!about) return `not about ${topic.label}`;
+    }
+  }
   if (f.originalLanguage) {
     const d = await getDetails(typeToKind(t.type), t.tmdbId).catch(() => null);
     if (d && d.originalLanguage !== f.originalLanguage) return `originally in ${d.originalLanguage ?? "another language"}, not ${f.originalLanguage}`;
@@ -534,7 +543,7 @@ export const TOOL_DEFS: ToolDef[] = [
  */
 export async function enforceConstraints(state: TurnState, ids: string[]): Promise<void> {
   const f = state.constraints;
-  if (!f.maxRuntime && !f.minRuntime && !f.services?.length && !f.yearMin && !f.yearMax && !f.maxRating && !f.originalLanguage && (!f.type || f.type === "any")) return;
+  if (!f.maxRuntime && !f.minRuntime && !f.services?.length && !f.yearMin && !f.yearMax && !f.maxRating && !f.originalLanguage && !f.topics?.length && (!f.type || f.type === "any")) return;
   await mapLimit(
     ids.filter((id) => !state.dropped.has(id) && !state.checked.has(id)),
     6,

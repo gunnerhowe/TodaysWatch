@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groundedWhy } from "./cards.ts";
+import { groundedIntro, groundedWhy } from "./cards.ts";
 
 const liked = [{ name: "Inside Out 2", genres: ["Animation", "Family", "Comedy"] }];
 
@@ -54,5 +54,22 @@ describe("single-genre picks", () => {
     const used = new Set<string>(["Modern Family"]);
     expect(groundedWhy({ genres: ["Comedy"], type: "TV" }, { sharedTags: [] }, likes, ["comedy"], used)).toBe("A comedy pick, as you asked; you liked Modern Family.");
     expect(groundedWhy({ genres: ["Comedy"], type: "MOVIE" }, { sharedTags: [] }, likes, ["comedy"])).toBe("A comedy pick, as you asked.");
+  });
+});
+
+describe("topics in reasons and the intro", () => {
+  it("says what it was checked to be about", () => {
+    expect(groundedWhy({ genres: ["Animation", "Family", "Fantasy"] }, { sharedTags: [] }, [], ["family"], new Set(), ["halloween"])).toBe("A family pick about Halloween, as you asked.");
+  });
+  it("the intro claims only what's true of every pick", () => {
+    const picks = [{ genres: ["Family", "Fantasy"] }, { genres: ["Family", "Comedy"] }, { genres: ["Animation", "Family"] }];
+    expect(groundedIntro(picks, { type: "movie", maxRating: "PG", topics: [{ label: "halloween" }] }, ["family", "comedy"])).toBe(
+      "Here are 3 family-friendly movies about Halloween, rated PG or under.",
+    );
+  });
+  it("covers groups, services and runtime", () => {
+    expect(groundedIntro([{ genres: ["Comedy"] }, { genres: ["Comedy"] }], { maxRuntime: 120, services: ["Netflix", "Hulu"] }, ["comedy"], undefined, 3)).toBe(
+      "Here are 2 funny picks for all 3 of you, under 2 hours and on Netflix or Hulu.",
+    );
   });
 });

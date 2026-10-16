@@ -224,11 +224,12 @@ const DISCOVER_MIN_VOTES = 1000;
  */
 export async function discoverForRequest(
   kind: Kind,
-  opts: { vibes: string[]; maxRuntime?: number; services?: string[]; yearMin?: number; yearMax?: number; originalLanguage?: string },
+  opts: { vibes: string[]; maxRuntime?: number; services?: string[]; yearMin?: number; yearMax?: number; originalLanguage?: string; keywordIds?: number[]; maxRating?: string },
 ): Promise<{ tmdbId: number; popularity: number }[]> {
   const genres = [...new Set(opts.vibes.flatMap((v) => VIBE_GENRES[v]?.[kind] ?? []))];
   const providers = [...new Set((opts.services ?? []).flatMap((s) => PROVIDER_IDS[s] ?? []))];
-  if (!genres.length && !providers.length && !opts.maxRuntime && !opts.originalLanguage) return [];
+  const keywords = opts.keywordIds ?? [];
+  if (!genres.length && !providers.length && !opts.maxRuntime && !opts.originalLanguage && !keywords.length) return [];
   const dateKey = kind === "movie" ? "primary_release_date" : "first_air_date";
   const params: Record<string, string | number | undefined> = {
     language: "en-US",
@@ -236,7 +237,12 @@ export async function discoverForRequest(
     include_adult: "false",
     // established titles: at 300 votes this month's releases topped every request ("funny" and
     // "cozy" both got the same two 2026 films)
-    "vote_count.gte": DISCOVER_MIN_VOTES,
+    // topic pools ("halloween") are small, so a lower floor; still established titles
+    "vote_count.gte": keywords.length ? 150 : DISCOVER_MIN_VOTES,
+    with_keywords: keywords.length ? keywords.join("|") : undefined,
+    // US certification cap for movies ("family friendly" = PG or under)
+    certification_country: kind === "movie" && opts.maxRating ? "US" : undefined,
+    "certification.lte": kind === "movie" && opts.maxRating ? opts.maxRating : undefined,
     with_genres: genres.length ? genres.join("|") : undefined, // any of the vibes
     "with_runtime.lte": opts.maxRuntime,
     with_watch_providers: providers.length ? providers.join("|") : undefined,
@@ -314,3 +320,31 @@ export async function fetchReviews(type: Kind, tmdbId: number, max = 200): Promi
 }
 
 export const TMDB_IMG = "https://image.tmdb.org/t/p";
+
+/**
+ * TMDB keyword ids for a topic ("halloween" -> halloween, halloween night…). Exact and
+ * starts-with matches only, so "space" doesn't pull in "space station toilet". Cached 7 days.
+ */
+export async function keywordIds(topic: string): Promise<{ id: number; name: string }[]> {
+  const q = topic.trim().toLowerCase();
+  const singular = q.replace(/s$/, "");
+  const { value } = await cached(`tmdb:keyword:${q}`, 7 * 24 * HOUR, async () => {
+    const d = await tmdb<{ results: { id: number; name: string }[] }>(`/search/keyword`, { query: q });
+    return d.results
+      .filter((k) => {
+        const n = k.name.toLowerCase();
+        return n === q || n === singular || n.startsWith(`${q} `) || n.startsWith(`${singular} `);
+      })
+      .slice(0, 5);
+  });
+  return value;
+}
+
+/** A title's TMDB keywords (lowercase names and ids). Cached 7 days. */
+export async function titleKeywords(kind: Kind, tmdbId: number): Promise<{ id: number; name: string }[]> {
+  const { value } = await cached(`tmdb:title-keywords:${kind}:${tmdbId}`, 7 * 24 * HOUR, async () => {
+    const d = await tmdb<{ keywords?: { id: number; name: string }[]; results?: { id: number; name: string }[] }>(`/${kind}/${tmdbId}/keywords`);
+    return (d.keywords ?? d.results ?? []).map((k) => ({ id: k.id, name: k.name.toLowerCase() }));
+  });
+  return value;
+}

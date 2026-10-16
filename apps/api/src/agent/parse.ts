@@ -45,8 +45,42 @@ const VIBES: [RegExp, string][] = [
   [/\bmystery|whodunn?it\b/i, "mystery"],
 ];
 
+/** Holidays and seasons people ask for by name ("a Halloween movie", "Christmas comedy"). */
+const OCCASIONS: [RegExp, string][] = [
+  [/\bhallowe[e']?n\b/i, "halloween"],
+  [/\b(christmas|xmas|holiday season)\b/i, "christmas"],
+  [/\bthanksgiving\b/i, "thanksgiving"],
+  [/\bvalentine'?s?\b/i, "valentine's day"],
+  [/\bnew year'?s?( eve)?\b/i, "new year's eve"],
+  [/\beaster\b/i, "easter"],
+  [/\b(hanukkah|chanukah)\b/i, "hanukkah"],
+  [/\b(4th|fourth) of july\b/i, "independence day"],
+];
+
+/** Words after "about"/"with" that describe people or the request, not a topic. */
+const NOT_TOPICS = /^(my|me|us|the kids|kids|friends|family|someone|a (friend|date)|her|him|them|subtitles|ads|no ads|netflix|hulu|max|prime|disney|peacock|apple|paramount|tubi|mubi|a twist|twists|good reviews|a happy ending)\b/i;
+
+/**
+ * Subjects the picks must be about: holidays ("Halloween"), and short phrases after "about",
+ * "featuring", "set in/at/during" or "with" ("about dinosaurs", "set in space", "with heists").
+ */
+export function parseTopics(text: string): string[] {
+  const out = new Set<string>();
+  for (const [re, topic] of OCCASIONS) if (re.test(text)) out.add(topic);
+  const re = /\b(?:about|featuring|involving|set (?:in|at|during)|with)\s+(?:an?\s+|the\s+|some\s+)?([a-z][a-z' -]{2,30}?)(?=[,.!?]|\s+(?:and|but|that|under|on|for|from|in|tonight|please|movies?|films?|shows?)\b|$)/gi;
+  for (const m of text.matchAll(re)) {
+    const phrase = m[1]!.trim().toLowerCase().replace(/\s+/g, " ");
+    if (!phrase || NOT_TOPICS.test(phrase) || phrase.split(" ").length > 3) continue;
+    if (OCCASIONS.some(([o]) => o.test(phrase))) continue; // already added by name
+    out.add(phrase);
+  }
+  return [...out].slice(0, 3);
+}
+
 export interface ParsedRequest {
   constraints: Constraints;
+  /** subjects the picks must be about ("halloween", "dinosaurs") */
+  topics: string[];
   vibes: string[];
   excludeVibes: string[];
   likeTitles: string[];
@@ -114,6 +148,7 @@ export function parseRequest(text: string): ParsedRequest {
 
   return {
     constraints: c,
+    topics: parseTopics(text),
     vibes,
     excludeVibes,
     likeTitles: likeTitles.filter((l) => !alreadySeen.includes(l)),

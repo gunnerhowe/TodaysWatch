@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFollowUp, isVague, parseRequest, refersBack } from "./parse.ts";
+import { isFollowUp, isVague, parseRequest, parseTopics, refersBack } from "./parse.ts";
 
 describe("parseRequest", () => {
   it("runtime limits", () => {
@@ -55,5 +55,23 @@ describe("follow-ups that build on the last request", () => {
     const p = parseRequest("something funny Only on Netflix");
     expect(p.vibes).toContain("comedy");
     expect(p.constraints.services).toEqual(["Netflix"]);
+  });
+});
+
+describe("topics", () => {
+  it("finds holidays and subjects", () => {
+    expect(parseTopics("Fun family friendly movie about Halloween")).toEqual(["halloween"]);
+    expect(parseTopics("a christmas comedy")).toEqual(["christmas"]);
+    expect(parseTopics("something about dinosaurs for the kids")).toEqual(["dinosaurs"]);
+    expect(parseTopics("a thriller set in space")).toEqual(["space"]);
+    expect(parseTopics("movies with heists, under 2 hours")).toEqual(["heists"]);
+  });
+  it("ignores people and services", () => {
+    expect(parseTopics("something to watch with my wife")).toEqual([]);
+    expect(parseTopics("something funny with Netflix")).toEqual([]);
+    expect(parseTopics("something funny")).toEqual([]);
+  });
+  it("family friendly still means PG or under", () => {
+    expect(parseRequest("Fun family friendly movie about Halloween").constraints.maxRating).toBe("PG");
   });
 });

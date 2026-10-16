@@ -28,7 +28,7 @@ export async function systemRoutes(app: FastifyInstance) {
     return {
       ok: db && q.ok && nebius.ready,
       db,
-      qloo: { ready: q.ok, detail: q.detail },
+      qloo: { ready: q.ok, detail: q.detail, baseUrl: q.baseUrl, probe: q.probe },
       nebius,
       youtubeUnitsLeft,
       sources: sourcesEnabled(),

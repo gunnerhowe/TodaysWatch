@@ -53,6 +53,7 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   applyContext(state, ctx);
   // constraints stated in the request apply even if the model never calls apply_constraints
   state.constraints = { ...parsed.constraints };
+  state.vibes = parsed.vibes;
 
   let usage = { in: 0, out: 0, cost: 0 };
   let rejected = 0;
@@ -242,6 +243,7 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
               const t = state.titles.get(id);
               return pickScore(state.candidates.get(id)?.taste ?? 0.5, t?.genreAdjusted ?? t?.wilsonLow ?? 0, w);
             },
+            watchable: (id) => state.available.get(id),
             canReplace: (newId, oldId) => {
               // two people: only swap in a title both fit at least about as well
               const was = state.candidates.get(oldId)?.pairWorse;
@@ -335,7 +337,9 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
     const rec = t.genreAdjusted ?? t.wilsonLow ?? 0;
     return pickScore(cand?.taste ?? 0.5, rec, w);
   };
-  const ordered = eligible.sort((a, b) => scoreOf(b) - scoreOf(a));
+  // watchable tonight first (theatrical-only titles last), then by pick score
+  const tonight = (id: string) => Number(state.available.get(id) !== false);
+  const ordered = eligible.sort((a, b) => tonight(b) - tonight(a) || scoreOf(b) - scoreOf(a));
   // scored first; then fill with the best taste matches that have no score yet ("score pending")
   const unscored = ids.filter((id) => !eligible.includes(id)).sort((a, b) => (state.candidates.get(b)?.taste ?? 0) - (state.candidates.get(a)?.taste ?? 0));
   const top = [...ordered, ...unscored].slice(0, 3);

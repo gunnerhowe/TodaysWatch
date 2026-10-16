@@ -26,7 +26,11 @@ export async function buildCards(state: TurnState, items: { id: string; why: str
     if (!t) continue;
     const c = state.candidates.get(t.id);
     const providers = await getProviders(typeToKind(t.type), t.tmdbId).catch(() => null);
-    const streaming = (providers?.providers ?? []).filter((p) => p.kind === "flatrate" || p.kind === "free" || p.kind === "ads").map((p) => p.name);
+    const all = providers?.providers ?? [];
+    const subscription = all.filter((p) => p.kind === "flatrate" || p.kind === "free" || p.kind === "ads").map((p) => p.name);
+    // no subscription option: show where to rent or buy instead of "nowhere"
+    const rentOnly = subscription.length === 0 && all.length > 0;
+    const streaming = rentOnly ? all.map((p) => p.name) : subscription;
     const shared = c?.sharedTags ?? [];
     const why = cleanWhy(it.why) || (shared.length ? `Shares ${shared.slice(0, 3).join(", ")} with titles you liked.` : "A strong taste match from Qloo.");
     const reception = t.genreAdjusted ?? t.wilsonLow;
@@ -43,6 +47,7 @@ export async function buildCards(state: TurnState, items: { id: string; why: str
       sharedTags: shared.slice(0, 4),
       ...(c?.perPerson ? { perPerson: c.perPerson } : {}),
       providers: [...new Set(streaming)].slice(0, 4),
+      rentOnly,
       scorePending: t.countedN < EARLY_MIN,
       pickScore: c?.taste != null && reception != null ? Math.round(pickScore(c.taste, reception, { taste: env.PICK_WEIGHT_TASTE, reception: env.PICK_WEIGHT_RECEPTION }) * 100) / 100 : null,
     });

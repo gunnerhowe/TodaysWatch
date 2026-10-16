@@ -43,6 +43,12 @@ export class TurnState {
   qloo: NonNullable<CallContext["trace"]> = [];
   notes: string[] = [];
   constraints: Constraints = {};
+  /** vibe words parsed from the request ("comedy", "horror"...), for the TMDB discover source */
+  vibes: string[] = [];
+  /** titles the user named as reference points ("like X"): never suggested back */
+  namedIds = new Set<string>();
+  /** title id -> watchable tonight in the US (any provider); filled by get_scores */
+  available = new Map<string, boolean>();
   pendingQuestion: Question | null = null;
   tagNames = new Map<string, string>();
 
@@ -79,6 +85,6 @@ export class TurnState {
    * nor the server's swap-in step can pick a 152-minute film for "under 2 hours".
    */
   excluded(id: string): boolean {
-    return this.dislikedIds.has(id) || this.dropped.has(id) || (!this.includeSeen && (this.seenIds.has(id) || this.likedIds.has(id)));
+    return this.dislikedIds.has(id) || this.dropped.has(id) || this.namedIds.has(id) || (!this.includeSeen && (this.seenIds.has(id) || this.likedIds.has(id)));
   }
 }

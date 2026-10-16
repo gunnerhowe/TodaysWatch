@@ -18,7 +18,8 @@
     "llm:models": "tsx --env-file-if-exists=../../.env scripts/llm-models.ts",
     "llm:smoke": "tsx --env-file-if-exists=../../.env scripts/llm-smoke.ts",
     "prescore": "tsx --env-file-if-exists=../../.env scripts/prescore.ts",
-    "eval": "tsx --env-file-if-exists=../../.env scripts/eval.ts"
+    "eval": "tsx --env-file-if-exists=../../.env scripts/eval.ts",
+    "agent:try": "tsx --env-file-if-exists=../../.env scripts/agent-try.ts"
   },
   "dependencies": {
     "@atproto/api": "0.27.0",

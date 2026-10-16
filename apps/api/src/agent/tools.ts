@@ -7,8 +7,8 @@ import type { ToolDef } from "../llm/index.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
 import { descriptiveTags, entitiesOf, issuesOf, tagsOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
-import { getDetails, getProviders } from "../sources/tmdb.ts";
-import { baselineSizes, genreLine, isStale, typeToKind } from "../titles.ts";
+import { discoverForRequest, getDetails, getProviders, normTitle, searchTitles, WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
+import { baselineSizes, genreLine, isStale, typeToKind, upsertTitle } from "../titles.ts";
 import { loadUserContext, type UserContext } from "./context.ts";
 import { pairCandidates } from "./pair.ts";
 import type { Constraints, TurnState } from "./state.ts";
@@ -63,9 +63,6 @@ export interface ToolEnv {
 
 type Handler = (args: Record<string, unknown>, e: ToolEnv) => Promise<unknown>;
 
-/** TMDB vote count above which a title counts as well known (for cold-start picks). */
-const WELL_KNOWN_VOTES = 300;
-
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /**
@@ -117,8 +114,20 @@ export const handlers: Record<string, Handler> = {
     const seedNames: string[] = [];
     for (const s of seedIds) {
       const t = state.titles.get(s) ?? (await prisma.title.findUnique({ where: { id: s } }));
-      if (t) seedTitles.push(t);
-      else seedNames.push(s.slice(0, 80)); // a title name from the request ("like Severance")
+      if (t) {
+        seedTitles.push(t);
+        continue;
+      }
+      // A title name from the request ("like Severance"). Passing the bare name to Qloo made it
+      // ask "Which Severance?"; TMDB search puts the one people mean (the 2022 series) first.
+      const name = s.slice(0, 80);
+      const hit = (await searchTitles(name).catch(() => [])).find((h) => normTitle(h.name) === normTitle(name));
+      const resolved = hit ? await upsertTitle(hit.type, hit.tmdbId).catch(() => null) : null;
+      if (resolved) {
+        state.remember(resolved);
+        state.namedIds.add(resolved.id); // "like Severance" should never suggest Severance
+        seedTitles.push(resolved);
+      } else seedNames.push(name);
     }
     if (seedTitles.length === 0 && seedNames.length === 0 && tags.length === 0) seedTitles.push(...ctx.liked.slice(0, 10));
     const signals = [...(await entityIds(state, seedTitles, 10 - Math.min(seedNames.length, 5))), ...seedNames.slice(0, 5)];
@@ -153,10 +162,31 @@ export const handlers: Record<string, Handler> = {
       if (known.length >= 3) kept = known;
     }
     for (const f of kept) state.addCandidate(f.t, { taste: f.taste, origin: "qloo_recommend", sharedTags: [] });
+
+    // Second source: well-known titles that already meet the request's genre, runtime and
+    // service (see discoverForRequest). They enter just below Qloo's own matches; rank_for_user
+    // then orders everything by this person's taste on Qloo.
+    const f = state.constraints;
+    const kindsWanted: ("movie" | "tv")[] =
+      type === "movie" ? ["movie"] : type === "tv" ? ["tv"] : f.type === "movie" || f.type === "tv" ? [f.type] : ["movie", "tv"];
+    const extra: Title[] = [];
+    if (state.vibes.length || f.services?.length || f.maxRuntime) {
+      for (const kind of kindsWanted) {
+        const list = await discoverForRequest(kind, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.services, yearMin: f.yearMin, yearMax: f.yearMax }).catch(() => []);
+        const titles = await mapLimit(list.slice(0, 12), 6, (d) => upsertTitle(kind, d.tmdbId).catch(() => null));
+        for (const t of titles)
+          if (t && !state.excluded(t.id) && !kept.some((k) => k.t.id === t.id) && !extra.some((x) => x.id === t.id)) extra.push(t);
+      }
+    }
+    extra.forEach((t, i) => state.addCandidate(t, { taste: Math.max(0.2, 0.45 - i * 0.01), origin: "tmdb_discover", sharedTags: [] }));
+
     return {
-      status: results.length ? results[0]!.r.status : "empty",
+      status: results.length ? results[0]!.r.status : extra.length ? "ok" : "empty",
       removed_seen_or_rated: found.length - kept.length,
-      candidates: kept.map((f) => ({ ...brief(f.t), runtime: f.t.runtimeMin, genres: f.t.genres.slice(0, 3), taste: round(f.taste) })),
+      candidates: [
+        ...kept.map((f) => ({ ...brief(f.t), runtime: f.t.runtimeMin, genres: f.t.genres.slice(0, 3), taste: round(f.taste), source: "qloo" })),
+        ...extra.map((t) => ({ ...brief(t), runtime: t.runtimeMin, genres: t.genres.slice(0, 3), taste: null, source: "well-known, meets your filters" })),
+      ],
     };
   },
 
@@ -205,6 +235,13 @@ export const handlers: Record<string, Handler> = {
     const sizes = await baselineSizes();
     let queued = 0;
     const out = [];
+    // Can it be watched tonight (streaming, rental or purchase in the US)? A theatrical-only
+    // title is a poor "tonight's pick" even if it fits.
+    await mapLimit(rows, 6, async (t) => {
+      if (state.available.has(t.id)) return;
+      const p = await getProviders(typeToKind(t.type), t.tmdbId).catch(() => null);
+      state.available.set(t.id, p ? p.providers.length > 0 : true);
+    });
     for (const t of rows) {
       state.remember(t);
       if (isStale(t) && queued < 5) {
@@ -224,10 +261,12 @@ export const handlers: Record<string, Handler> = {
         genre_line: genreLine(t, sizes),
         genre_adjusted: round(t.genreAdjusted),
         pick_score: round(ps),
+        watchable_tonight: state.available.get(t.id) ?? null,
         eligible_as_pick: t.countedN >= EARLY_MIN && !state.excluded(t.id),
       });
     }
-    out.sort((x, y) => (y.pick_score ?? -1) - (x.pick_score ?? -1));
+    // watchable tonight first, then by pick score
+    out.sort((x, y) => Number(y.watchable_tonight !== false) - Number(x.watchable_tonight !== false) || (y.pick_score ?? -1) - (x.pick_score ?? -1));
     return { scores: out, scoring_started_for: queued };
   },
 

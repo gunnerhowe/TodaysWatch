@@ -110,3 +110,30 @@ describe("pick for two", () => {
     expect(a.picks.map((p) => p.id)).toEqual(["a", "b", "q"]);
   });
 });
+
+describe("watchable tonight", () => {
+  it("swaps a theatrical-only pick for a scored title that can be watched tonight", () => {
+    const v = { ...view(), rank: () => 1, why: () => "streams", watchable: (id: string) => id !== "b" };
+    const a = { intro: "", picks: [pick("a"), pick("b"), pick("c")], backups: [] as { id: string; why: string }[], question: null };
+    promoteScored(a, v);
+    expect(a.picks.map((p) => p.id)).toEqual(["a", "d", "c"]);
+    expect(a.backups.map((p) => p.id)).toEqual(["b"]);
+  });
+});
+
+describe("watchable beats theatrical even without a score", () => {
+  it("replaces a scored theatrical-only pick with an unscored title you can watch tonight", () => {
+    // t1/t2 scored but in theaters only; w1/w2 unscored but streaming
+    const v = {
+      allowed: new Set(["t1", "t2", "ok", "w1", "w2"]),
+      excluded: () => false,
+      countedN: (id: string) => (id.startsWith("w") ? 0 : 200),
+      rank: (id: string) => (id === "w2" ? 2 : 1),
+      why: () => "streams",
+      watchable: (id: string) => !id.startsWith("t"),
+    };
+    const a = { intro: "", picks: [pick("t1"), pick("t2"), pick("ok")], backups: [] as { id: string; why: string }[], question: null };
+    promoteScored(a, v);
+    expect(a.picks.map((p) => p.id)).toEqual(["w2", "w1", "ok"]);
+  });
+});

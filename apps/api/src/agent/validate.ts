@@ -65,17 +65,25 @@ export function promoteScored(
     why: (id: string) => string;
     /** may `newId` take `oldId`'s slot? (pick-for-two: never trade a compromise for a one-sided title) */
     canReplace?: (newId: string, oldId: string) => boolean;
+    /** watchable tonight in the US? undefined = unknown */
+    watchable?: (id: string) => boolean | undefined;
   },
 ): string[] {
   const inPicks = new Set(a.picks.map((p) => p.id));
+  const scored = (id: string) => (v.countedN(id) ?? 0) >= EARLY_MIN;
+  const watchable = (id: string) => v.watchable?.(id) !== false;
+  // watchable candidates not already picked: scored ones first, then by rank
   const spare = [...v.allowed]
-    .filter((id) => !inPicks.has(id) && !v.excluded(id) && (v.countedN(id) ?? 0) >= EARLY_MIN)
-    .sort((x, y) => v.rank(y) - v.rank(x));
+    .filter((id) => !inPicks.has(id) && !v.excluded(id) && watchable(id))
+    .sort((x, y) => Number(scored(y)) - Number(scored(x)) || v.rank(y) - v.rank(x));
   const swapped: string[] = [];
   const demoted: { id: string; why: string }[] = [];
   a.picks = a.picks.map((p) => {
-    if ((v.countedN(p.id) ?? 0) >= EARLY_MIN || spare.length === 0) return p;
-    const at = spare.findIndex((id) => !v.canReplace || v.canReplace(id, p.id));
+    if (scored(p.id) && watchable(p.id)) return p;
+    // An unscored pick gives way only to a scored, watchable title. A pick that can't be
+    // watched tonight (theatrical only) gives way to any watchable title, scored ones first.
+    const ok = (id: string) => (watchable(p.id) ? scored(id) : true) && (!v.canReplace || v.canReplace(id, p.id));
+    const at = spare.findIndex(ok);
     if (at < 0) return p;
     const id = spare.splice(at, 1)[0]!;
     swapped.push(id);

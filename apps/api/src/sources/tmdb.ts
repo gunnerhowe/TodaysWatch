@@ -177,6 +177,79 @@ export async function discoverByGenre(kind: Kind, genreId: number, page = 1) {
   return d.results.map((r) => ({ tmdbId: r.id, type: kind, popularity: r.popularity ?? 0 }));
 }
 
+/** Request vibes (from agent/parse.ts) to TMDB genre ids. Movie and TV lists differ. */
+const VIBE_GENRES: Record<string, { movie: number[]; tv: number[] }> = {
+  comedy: { movie: [35], tv: [35] },
+  horror: { movie: [27], tv: [9648] }, // TMDB has no TV horror genre; mystery is the closest
+  thriller: { movie: [53], tv: [80, 9648] },
+  "slow burn": { movie: [53, 18], tv: [18] },
+  "feel good": { movie: [35, 10751], tv: [35, 10751] },
+  romance: { movie: [10749], tv: [18] },
+  "mind-bending": { movie: [878, 9648], tv: [10765, 9648] },
+  "science fiction": { movie: [878], tv: [10765] },
+  action: { movie: [28], tv: [10759] },
+  documentary: { movie: [99], tv: [99] },
+  animation: { movie: [16], tv: [16] },
+  emotional: { movie: [18], tv: [18] },
+  family: { movie: [10751], tv: [10751] },
+  mystery: { movie: [9648], tv: [9648] },
+};
+
+/** US streaming services (names as parse.ts emits them) to TMDB / JustWatch provider ids. */
+const PROVIDER_IDS: Record<string, number[]> = {
+  Netflix: [8],
+  Hulu: [15],
+  "Amazon Prime Video": [9],
+  "Disney Plus": [337],
+  Max: [1899],
+  "Apple TV Plus": [350],
+  Peacock: [386],
+  "Paramount Plus": [531],
+  "Tubi TV": [73],
+  MUBI: [11],
+};
+
+export const WELL_KNOWN_VOTES = 300;
+const DISCOVER_MIN_VOTES = 1000;
+
+/**
+ * Well-known titles that already meet a request's genre, runtime and streaming service, most
+ * popular first. Qloo is strong at taste from titles you name or like, but tag-only requests
+ * ("funny") return obscure catalog items, and strict filters ("Netflix comedy under 100 min")
+ * can leave none of Qloo's candidates standing. Cached 6 hours.
+ */
+export async function discoverForRequest(
+  kind: Kind,
+  opts: { vibes: string[]; maxRuntime?: number; services?: string[]; yearMin?: number; yearMax?: number },
+): Promise<{ tmdbId: number; popularity: number }[]> {
+  const genres = [...new Set(opts.vibes.flatMap((v) => VIBE_GENRES[v]?.[kind] ?? []))];
+  const providers = [...new Set((opts.services ?? []).flatMap((s) => PROVIDER_IDS[s] ?? []))];
+  if (!genres.length && !providers.length && !opts.maxRuntime) return [];
+  const dateKey = kind === "movie" ? "primary_release_date" : "first_air_date";
+  const params: Record<string, string | number | undefined> = {
+    language: "en-US",
+    sort_by: "popularity.desc",
+    include_adult: "false",
+    // established titles: at 300 votes this month's releases topped every request ("funny" and
+    // "cozy" both got the same two 2026 films)
+    "vote_count.gte": DISCOVER_MIN_VOTES,
+    with_genres: genres.length ? genres.join("|") : undefined, // any of the vibes
+    "with_runtime.lte": opts.maxRuntime,
+    with_watch_providers: providers.length ? providers.join("|") : undefined,
+    watch_region: providers.length ? "US" : undefined,
+    with_watch_monetization_types: providers.length ? "flatrate|free|ads" : undefined,
+    [`${dateKey}.gte`]: opts.yearMin ? `${opts.yearMin}-01-01` : undefined,
+    [`${dateKey}.lte`]: opts.yearMax ? `${opts.yearMax}-12-31` : undefined,
+    page: 1,
+  };
+  const key = `tmdb:discover:${kind}:${JSON.stringify(params)}`;
+  const { value } = await cached(key, 6 * HOUR, async () => {
+    const d = await tmdb<ListResp>(`/discover/${kind}`, params);
+    return d.results.map((r) => ({ tmdbId: r.id, popularity: r.popularity ?? 0 }));
+  });
+  return value;
+}
+
 export async function genreList(kind: Kind): Promise<{ id: number; name: string }[]> {
   const { value } = await cached(`tmdb:genres:${kind}`, 7 * 24 * HOUR, async () => {
     const d = await tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${kind}/list`, { language: "en-US" });

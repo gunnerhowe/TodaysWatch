@@ -55,7 +55,7 @@ export function PickCard({ card, rank, onNotThis }: { card: Card; rank: number; 
             </ul>
           )}
         </div>
-        <p className="text-xs text-dim">{card.providers.length ? `Stream on ${card.providers.join(", ")}` : "Not on a US subscription service right now"}</p>
+        <p className="text-xs text-dim">{card.providers.length ? `${card.rentOnly ? "Rent or buy on" : "Stream on"} ${card.providers.join(", ")}` : "Not available to watch in the US yet"}</p>
         <div className="flex flex-wrap items-center gap-2">
           <ThumbControls titleId={card.titleId} compact />
           {onNotThis && (

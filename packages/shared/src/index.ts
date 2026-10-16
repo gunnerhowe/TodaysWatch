@@ -138,6 +138,8 @@ export const PickCardZ = z.object({
   /** for Two-Person Pick: one line per person */
   perPerson: z.array(z.object({ who: z.string(), reason: z.string() })).optional(),
   providers: z.array(z.string()),
+  /** true when the providers listed are rental/purchase only (no subscription option) */
+  rentOnly: z.boolean().optional(),
   scorePending: z.boolean(),
   pickScore: z.number().nullable(),
 });

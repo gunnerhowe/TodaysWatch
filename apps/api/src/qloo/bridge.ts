@@ -36,7 +36,9 @@ function harnessCommand(): { command: string; args: string[] } {
 /** The harness's environment: ours, plus the Qloo server our key belongs to. */
 function harnessEnv(): Record<string, string> {
   const base = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>;
-  return { ...base, QLOO_BASE_URL: env.QLOO_BASE_URL };
+  // The harness won't send the key to a non-default server until that exact URL is approved;
+  // QLOO_BASE_URL is Qloo's own hackathon endpoint (from Qloo's access email), so approve it.
+  return { ...base, QLOO_BASE_URL: env.QLOO_BASE_URL, QLOO_TRUSTED_BASE_URL: env.QLOO_BASE_URL };
 }
 
 let client: Client | null = null;

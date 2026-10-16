@@ -90,6 +90,12 @@ export const handlers: Record<string, Handler> = {
       seen: ctx.seen.slice(0, 40).map((t) => t.id),
       include_seen: state.includeSeen,
       group_size: ctx.groupMembers.length + 1, // 1 = just this user; 2-5 = a pick-together group
+      // applied by the server automatically; mention them briefly ("all on your Netflix or Hulu")
+      filters_in_effect: {
+        services: state.constraints.services ?? [],
+        rentals_ok: !!state.constraints.rentalsOk,
+        original_language: state.constraints.originalLanguage ?? null,
+      },
       note: ctx.liked.length === 0 ? "The user has not rated anything yet. Use the request's own vibe tags and popular, well-scored titles." : undefined,
     };
   },
@@ -173,7 +179,7 @@ export const handlers: Record<string, Handler> = {
     const extra: Title[] = [];
     if (state.vibes.length || f.services?.length || f.maxRuntime) {
       for (const kind of kindsWanted) {
-        const list = await discoverForRequest(kind, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.services, yearMin: f.yearMin, yearMax: f.yearMax }).catch(() => []);
+        const list = await discoverForRequest(kind, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.rentalsOk ? undefined : f.services, yearMin: f.yearMin, yearMax: f.yearMax, originalLanguage: f.originalLanguage }).catch(() => []);
         const titles = await mapLimit(list.slice(0, 12), 6, (d) => upsertTitle(kind, d.tmdbId).catch(() => null));
         for (const t of titles)
           if (t && !state.excluded(t.id) && !kept.some((k) => k.t.id === t.id) && !extra.some((x) => x.id === t.id)) extra.push(t);
@@ -283,12 +289,15 @@ export const handlers: Record<string, Handler> = {
       type: (a.type as Constraints["type"]) ?? undefined,
     };
     state.constraints = { ...state.constraints, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) };
+    // services named in this request are strict: no falling back to rentals
+    if (f.services?.length) state.constraints.rentalsOk = false;
+    const all = state.constraints; // includes the profile's language and services
     const kept: string[] = [];
     const dropped: { id: string; reason: string }[] = [];
     await mapLimit(ids, 6, async (id) => {
       const t = state.titles.get(id) ?? (await prisma.title.findUnique({ where: { id } }));
       if (!t) return;
-      const why = await violates(t, f);
+      const why = await violates(t, all);
       if (why) dropped.push({ id, reason: why });
       else kept.push(id);
     });
@@ -380,7 +389,7 @@ function round(v: number | null | undefined): number | null {
 
 const RATING_ORDER = ["G", "TV-Y", "TV-Y7", "TV-G", "PG", "TV-PG", "PG-13", "TV-14", "R", "TV-MA", "NC-17"];
 
-async function violates(t: Title, f: Constraints): Promise<string | null> {
+export async function violates(t: Title, f: Constraints): Promise<string | null> {
   if (f.type && f.type !== "any" && typeToKind(t.type) !== f.type) return `not a ${f.type}`;
   if (f.maxRuntime && t.runtimeMin && t.runtimeMin > f.maxRuntime) return `runtime ${t.runtimeMin} min > ${f.maxRuntime}`;
   if (f.minRuntime && t.runtimeMin && t.runtimeMin < f.minRuntime) return `runtime ${t.runtimeMin} min < ${f.minRuntime}`;
@@ -392,11 +401,16 @@ async function violates(t: Title, f: Constraints): Promise<string | null> {
     const max = RATING_ORDER.indexOf(f.maxRating.toUpperCase());
     if (cert && max >= 0 && RATING_ORDER.indexOf(cert) > max) return `rated ${cert}`;
   }
+  if (f.originalLanguage) {
+    const d = await getDetails(typeToKind(t.type), t.tmdbId).catch(() => null);
+    if (d && d.originalLanguage !== f.originalLanguage) return `originally in ${d.originalLanguage ?? "another language"}, not ${f.originalLanguage}`;
+  }
   if (f.services?.length) {
     const p = await getProviders(typeToKind(t.type), t.tmdbId).catch(() => null);
     const streaming = (p?.providers ?? []).filter((x) => x.kind === "flatrate" || x.kind === "free" || x.kind === "ads").map((x) => x.name.toLowerCase());
     const ok = f.services.some((s) => streaming.some((n) => n.includes(s.toLowerCase().replace(/ plus$/, "")) || s.toLowerCase().includes(n)));
-    if (!ok) return `not streaming on ${f.services.join(" or ")} (US)`;
+    const rentable = f.rentalsOk && (p?.providers ?? []).some((x) => x.kind === "rent" || x.kind === "buy");
+    if (!ok && !rentable) return `not streaming on ${f.services.join(" or ")} (US)`;
   }
   return null;
 }
@@ -511,7 +525,7 @@ export const TOOL_DEFS: ToolDef[] = [
  */
 export async function enforceConstraints(state: TurnState, ids: string[]): Promise<void> {
   const f = state.constraints;
-  if (!f.maxRuntime && !f.minRuntime && !f.services?.length && !f.yearMin && !f.yearMax && !f.maxRating && (!f.type || f.type === "any")) return;
+  if (!f.maxRuntime && !f.minRuntime && !f.services?.length && !f.yearMin && !f.yearMax && !f.maxRating && !f.originalLanguage && (!f.type || f.type === "any")) return;
   await mapLimit(
     ids.filter((id) => !state.dropped.has(id) && !state.checked.has(id)),
     6,

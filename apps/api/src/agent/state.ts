@@ -28,6 +28,10 @@ export interface Constraints {
   yearMax?: number;
   maxRating?: string;
   type?: "movie" | "tv" | "any";
+  /** ISO 639-1: only titles originally made in this language (from the profile setting) */
+  originalLanguage?: string;
+  /** with services from the profile, rent/buy-only titles are fine too (never for "on Netflix" requests) */
+  rentalsOk?: boolean;
 }
 
 /** Everything the server knows about one agent turn. The validator reads `allowed`. */

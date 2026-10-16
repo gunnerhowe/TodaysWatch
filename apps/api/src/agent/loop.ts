@@ -6,7 +6,7 @@ import { enqueueScore } from "../jobs/index.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
 import { buildCards } from "./cards.ts";
-import { applyContext, loadUserContext, type UserContext } from "./context.ts";
+import { applyContext, loadUserContext, settingsConstraints, type UserContext } from "./context.ts";
 import { isVague, parseRequest } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
@@ -53,6 +53,8 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   applyContext(state, ctx);
   // constraints stated in the request apply even if the model never calls apply_constraints
   state.constraints = { ...parsed.constraints };
+  // the profile's language and streaming services (combined across a group) apply by default
+  Object.assign(state.constraints, await settingsConstraints(ctx, parsed.constraints, state.pairId ? ctx.groupMembers.map((m) => m.profileId) : []));
   state.vibes = parsed.vibes;
 
   let usage = { in: 0, out: 0, cost: 0 };

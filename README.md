@@ -21,7 +21,7 @@ Critics and star ratings tell you what reviewers think. Tonight's Pick reads wha
 | **Pick together (2–5 people):** send one link; everyone joins with the ratings they already have (or rates 5 as a guest), and gets 3 picks the least-excited person still likes, skipping anything anyone has seen or disliked. Each pair sees their **taste match** ("You & Alex: 78%") and what they both like | `/pair` |
 | **Share:** any set of picks or taste match becomes a link with a text-only preview card for group chats and social apps | `/s/…` |
 | **Ask by voice:** a real MCP server for Alexa+, plus a simulated Alexa+ page in the browser | `/mcp`, `/alexa` |
-| **Profile:** guest-first (no login), liked / seen / want-to-watch lists, "your taste" tags, export and delete | `/me` |
+| **Profile:** guest-first (no login); **your streaming services** (picks only include what streams on them, optionally rentals) and **your language** (optionally only titles originally made in it, nothing dubbed); collapsible liked / seen / want-to-watch lists; "your taste" tags; export and delete | `/me` |
 
 Add `?demo=1` to any URL for **demo mode**: posters are replaced by plain title cards (used for every video and screenshot).
 

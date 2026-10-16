@@ -1,7 +1,7 @@
 import Link from "next/link";
-import type { Profile, TitleChip } from "@tp/shared";
-import { SettingsPanel, VoiceLink } from "@/components/ProfileControls";
-import { Empty, TileGrid, TitleTile } from "@/components/TitleTile";
+import { SettingsZ, type Profile } from "@tp/shared";
+import { SettingsPanel, VoiceLink, WatchSettings } from "@/components/ProfileControls";
+import { ProfileList } from "@/components/ProfileList";
 import { apiSafe } from "@/lib/server";
 
 export const metadata = { title: "Your profile" };
@@ -27,10 +27,19 @@ export default async function Me() {
         )}
       </section>
 
-      <List title="Liked" items={profile?.liked ?? []} empty="Thumbs up a title you enjoyed." />
-      <List title="Want to watch" items={profile?.wantToWatch ?? []} empty="Tap “Want to watch” on any title." />
-      <List title="Seen" items={profile?.seen ?? []} empty="Nothing marked as seen yet." />
-      <List title="Didn't like" items={profile?.disliked ?? []} empty="No thumbs down yet." />
+      <section aria-labelledby="watch-h" className="surface space-y-3 rounded-2xl p-5">
+        <h2 id="watch-h" className="font-display text-2xl font-semibold uppercase">
+          What you can watch
+        </h2>
+        <WatchSettings initial={profile?.settings ?? SettingsZ.parse({})} />
+      </section>
+
+      <div className="space-y-3">
+        <ProfileList title="Liked" items={profile?.liked ?? []} empty="Thumbs up a title you enjoyed." />
+        <ProfileList title="Want to watch" items={profile?.wantToWatch ?? []} empty="Tap “Want to watch” on any title." />
+        <ProfileList title="Seen" items={profile?.seen ?? []} empty="Nothing marked as seen yet." />
+        <ProfileList title="Didn't like" items={profile?.disliked ?? []} empty="No thumbs down yet." />
+      </div>
 
       <section aria-labelledby="voice-h" className="surface space-y-2 rounded-2xl p-5">
         <h2 id="voice-h" className="font-display text-2xl font-semibold uppercase">
@@ -49,24 +58,5 @@ export default async function Me() {
         <SettingsPanel includeSeen={profile?.settings.includeSeen ?? false} />
       </section>
     </div>
-  );
-}
-
-function List({ title, items, empty }: { title: string; items: TitleChip[]; empty: string }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="font-display text-2xl font-semibold uppercase">
-        {title} <span className="tabular text-base text-faint">{items.length}</span>
-      </h2>
-      {items.length ? (
-        <TileGrid>
-          {items.slice(0, 24).map((t) => (
-            <TitleTile key={t.id} t={t} />
-          ))}
-        </TileGrid>
-      ) : (
-        <Empty title={`No ${title.toLowerCase()} titles`}>{empty}</Empty>
-      )}
-    </section>
   );
 }

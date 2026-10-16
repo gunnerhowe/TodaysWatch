@@ -99,7 +99,58 @@ export const RatingZ = z.object({
 });
 export type Rating = z.infer<typeof RatingZ>;
 
-export const SettingsZ = z.object({ includeSeen: z.boolean().default(false) });
+/** US streaming services we can filter by (names match TMDB/JustWatch provider ids on the API). */
+export const STREAMING_SERVICES = [
+  { id: "Netflix", label: "Netflix" },
+  { id: "Hulu", label: "Hulu" },
+  { id: "Amazon Prime Video", label: "Prime Video" },
+  { id: "Disney Plus", label: "Disney+" },
+  { id: "Max", label: "Max" },
+  { id: "Apple TV Plus", label: "Apple TV+" },
+  { id: "Peacock", label: "Peacock" },
+  { id: "Paramount Plus", label: "Paramount+" },
+  { id: "Tubi TV", label: "Tubi (free)" },
+  { id: "MUBI", label: "MUBI" },
+] as const;
+export const ServiceIdZ = z.enum(STREAMING_SERVICES.map((s) => s.id) as [string, ...string[]]);
+
+/** Original languages to filter by (ISO 639-1, as TMDB's original_language uses them). */
+export const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "es", label: "Spanish" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "it", label: "Italian" },
+  { code: "pt", label: "Portuguese" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "zh", label: "Chinese (Mandarin)" },
+  { code: "cn", label: "Chinese (Cantonese)" },
+  { code: "hi", label: "Hindi" },
+  { code: "ar", label: "Arabic" },
+  { code: "ru", label: "Russian" },
+  { code: "tr", label: "Turkish" },
+  { code: "nl", label: "Dutch" },
+  { code: "sv", label: "Swedish" },
+  { code: "da", label: "Danish" },
+  { code: "no", label: "Norwegian" },
+  { code: "pl", label: "Polish" },
+  { code: "th", label: "Thai" },
+  { code: "tl", label: "Tagalog" },
+] as const;
+export const LanguageCodeZ = z.enum(LANGUAGES.map((l) => l.code) as [string, ...string[]]);
+
+export const SettingsZ = z.object({
+  includeSeen: z.boolean().default(false),
+  /** the viewer's language */
+  language: LanguageCodeZ.nullable().default(null),
+  /** only titles originally made in `language` (nothing dubbed) */
+  onlyMyLanguage: z.boolean().default(false),
+  /** services they have; picks are limited to titles streaming on one of them (none = any) */
+  services: z.array(ServiceIdZ).max(20).default([]),
+  /** with services set, also allow titles they could rent or buy */
+  includeRentals: z.boolean().default(false),
+});
 export type Settings = z.infer<typeof SettingsZ>;
 
 export const TitleChipZ = z.object({

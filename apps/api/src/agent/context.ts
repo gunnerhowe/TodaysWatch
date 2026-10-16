@@ -1,7 +1,7 @@
 import type { Title } from "@prisma/client";
-import { SettingsZ } from "@tp/shared";
+import { SettingsZ, type Settings } from "@tp/shared";
 import { prisma } from "../db.ts";
-import type { TurnState } from "./state.ts";
+import type { Constraints, TurnState } from "./state.ts";
 
 export interface UserContext {
   liked: Title[];
@@ -9,6 +9,7 @@ export interface UserContext {
   seen: Title[];
   wantToWatch: Title[];
   includeSeen: boolean;
+  settings: Settings;
   /** the other people in this pick-together group (2-5 people), with the label the group sees */
   groupMembers: { profileId: string; label: string }[];
 }
@@ -42,6 +43,7 @@ export async function loadUserContext(profileId: string, pairId?: string | null)
     seen: ratings.filter((r) => r.seen || r.value !== null).map((r) => r.title),
     wantToWatch: ratings.filter((r) => r.wantToWatch).map((r) => r.title),
     includeSeen: settings.includeSeen,
+    settings,
     groupMembers,
   };
 }
@@ -50,4 +52,23 @@ export function applyContext(state: TurnState, ctx: UserContext) {
   for (const t of ctx.liked) state.likedIds.add(t.id);
   for (const t of ctx.disliked) state.dislikedIds.add(t.id);
   for (const t of ctx.seen) state.seenIds.add(t.id);
+}
+
+/**
+ * Profile defaults for a turn's constraints. Services named in the request win (and are strict).
+ * For a group, a title counts if anyone in the group has the service, since you watch on one TV;
+ * rentals are fine if anyone with services allows them. Language comes from the person asking.
+ */
+export async function settingsConstraints(ctx: UserContext, requested: Constraints, groupProfileIds: string[]): Promise<Constraints> {
+  const others = groupProfileIds.length
+    ? (await prisma.profile.findMany({ where: { id: { in: groupProfileIds } }, select: { settings: true } })).map((p) => SettingsZ.safeParse(p.settings ?? {})).flatMap((r) => (r.success ? [r.data] : []))
+    : [];
+  const people = [ctx.settings, ...others].filter((s) => s.services.length);
+  const out: Constraints = {};
+  if (!requested.services?.length && people.length) {
+    out.services = [...new Set(people.flatMap((s) => s.services))];
+    out.rentalsOk = people.some((s) => s.includeRentals);
+  }
+  if (ctx.settings.onlyMyLanguage && ctx.settings.language) out.originalLanguage = ctx.settings.language;
+  return out;
 }

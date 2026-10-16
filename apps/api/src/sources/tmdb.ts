@@ -86,6 +86,8 @@ export interface TmdbDetails {
   voteAverage: number | null;
   voteCount: number | null;
   certification: string | null;
+  /** ISO 639-1 language it was originally made in, e.g. "en", "ko" */
+  originalLanguage: string | null;
 }
 
 interface DetailsResp {
@@ -104,10 +106,11 @@ interface DetailsResp {
   vote_count?: number;
   release_dates?: { results: { iso_3166_1: string; release_dates: { certification: string }[] }[] };
   content_ratings?: { results: { iso_3166_1: string; rating: string }[] };
+  original_language?: string;
 }
 
 export async function getDetails(type: Kind, tmdbId: number): Promise<TmdbDetails> {
-  const { value } = await cached<Omit<TmdbDetails, "releaseDate"> & { releaseDate: string | null }>(`tmdb:details:${type}:${tmdbId}`, 24 * HOUR, async () => {
+  const { value } = await cached<Omit<TmdbDetails, "releaseDate"> & { releaseDate: string | null }>(`tmdb:details:v2:${type}:${tmdbId}`, 24 * HOUR, async () => {
     const d = await tmdb<DetailsResp>(`/${type}/${tmdbId}`, {
       language: "en-US",
       append_to_response: type === "movie" ? "release_dates" : "content_ratings",
@@ -131,6 +134,7 @@ export async function getDetails(type: Kind, tmdbId: number): Promise<TmdbDetail
       voteAverage: d.vote_average ?? null,
       voteCount: d.vote_count ?? null,
       certification: cert || null,
+      originalLanguage: d.original_language ?? null,
     };
   });
   return { ...value, releaseDate: value.releaseDate ? new Date(value.releaseDate) : null };
@@ -220,11 +224,11 @@ const DISCOVER_MIN_VOTES = 1000;
  */
 export async function discoverForRequest(
   kind: Kind,
-  opts: { vibes: string[]; maxRuntime?: number; services?: string[]; yearMin?: number; yearMax?: number },
+  opts: { vibes: string[]; maxRuntime?: number; services?: string[]; yearMin?: number; yearMax?: number; originalLanguage?: string },
 ): Promise<{ tmdbId: number; popularity: number }[]> {
   const genres = [...new Set(opts.vibes.flatMap((v) => VIBE_GENRES[v]?.[kind] ?? []))];
   const providers = [...new Set((opts.services ?? []).flatMap((s) => PROVIDER_IDS[s] ?? []))];
-  if (!genres.length && !providers.length && !opts.maxRuntime) return [];
+  if (!genres.length && !providers.length && !opts.maxRuntime && !opts.originalLanguage) return [];
   const dateKey = kind === "movie" ? "primary_release_date" : "first_air_date";
   const params: Record<string, string | number | undefined> = {
     language: "en-US",
@@ -238,6 +242,7 @@ export async function discoverForRequest(
     with_watch_providers: providers.length ? providers.join("|") : undefined,
     watch_region: providers.length ? "US" : undefined,
     with_watch_monetization_types: providers.length ? "flatrate|free|ads" : undefined,
+    with_original_language: opts.originalLanguage,
     [`${dateKey}.gte`]: opts.yearMin ? `${opts.yearMin}-01-01` : undefined,
     [`${dateKey}.lte`]: opts.yearMax ? `${opts.yearMax}-12-31` : undefined,
     page: 1,

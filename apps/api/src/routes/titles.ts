@@ -1,6 +1,8 @@
 import type { Title } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { SettingsZ } from "@tp/shared";
+import { violates } from "../agent/tools.ts";
 import { trendingTitles } from "../agent/trending.ts";
 import { prisma } from "../db.ts";
 import { enqueueScore } from "../jobs/index.ts";
@@ -131,12 +133,19 @@ export async function titleRoutes(app: FastifyInstance) {
     const exclude = new Set(ratings.filter((r) => r.seen || r.value).map((r) => r.titleId));
     const likes = ratings.filter((r) => r.value === "UP" && r.title.type === t.type && r.title.qlooEntityId).slice(0, 4).map((r) => r.title.qlooEntityId!);
     const kind = typeToKind(t.type);
-    const r = await callQloo("qloo_recommend", { target_type: kind === "movie" ? "movie" : "tv_show", signals: [m.entityId, ...likes], limit: 12 });
+    // the viewer's streaming services and language apply here too
+    const settings = SettingsZ.safeParse(profile?.settings ?? {});
+    const s = settings.success ? settings.data : null;
+    const filters = s ? { ...(s.services.length ? { services: s.services, rentalsOk: s.includeRentals } : {}), ...(s.onlyMyLanguage && s.language ? { originalLanguage: s.language } : {}) } : {};
+    const filtered = Object.keys(filters).length > 0;
+    const r = await callQloo("qloo_recommend", { target_type: kind === "movie" ? "movie" : "tv_show", signals: [m.entityId, ...likes], limit: filtered ? 20 : 12 });
     const out: Title[] = [];
     for (const e of entitiesOf(r)) {
       if (out.length >= 6) break;
       const x = await titleFromEntity(e, kind).catch(() => null);
-      if (x && x.id !== t.id && !exclude.has(x.id) && !out.some((o) => o.id === x.id)) out.push(x);
+      if (!x || x.id === t.id || exclude.has(x.id) || out.some((o) => o.id === x.id)) continue;
+      if (filtered && (await violates(x, filters))) continue;
+      out.push(x);
     }
     for (const x of out) if (x.scoreState === "NONE") void enqueueScore(x.id, false);
     return { titles: out.map(chipDto), status: r.status };

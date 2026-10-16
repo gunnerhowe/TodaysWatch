@@ -66,14 +66,24 @@ function Footer() {
           <Link href="/how-it-works" className="hover:underline">How it works</Link>
           <Link href="/privacy" className="hover:underline">Privacy</Link>
           <Link href="/alexa" className="hover:underline">Ask by voice</Link>
-          <a href="https://github.com/" className="hover:underline">Source (MIT)</a>
+          <a href="https://github.com/gunnerhowe/TodaysWatch" className="hover:underline" rel="noopener noreferrer" target="_blank">
+            Source (MIT)
+          </a>
         </div>
-        <p className="flex items-center gap-2">
-          {/* TMDB's terms require their logo: download the official SVG from themoviedb.org/about/logos-attribution to public/tmdb-logo.svg */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/tmdb-logo.svg" alt="TMDB" width={46} height={10} className="h-2.5 w-auto" />
-          This product uses the TMDB API but is not endorsed or certified by TMDB. Where-to-watch data provided by JustWatch.
-        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {/* TMDB attribution, as their API terms require: official logo (themoviedb.org/about/logos-attribution) and notice */}
+          <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="shrink-0" aria-label="The Movie Database (TMDB)">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/tmdb-logo.svg" alt="TMDB" width={92} height={12} className="h-3 w-auto" />
+          </a>
+          <p>
+            This product uses the TMDB API but is not endorsed or certified by TMDB. Where-to-watch data provided by{" "}
+            <a href="https://www.justwatch.com" target="_blank" rel="noopener noreferrer" className="underline">
+              JustWatch
+            </a>
+            .
+          </p>
+        </div>
         <p>Scores come from public comments collected through official APIs (YouTube, Bluesky, TMDB reviews, and Reddit or Trakt when enabled). Taste matching by Qloo. Classification by NVIDIA Nemotron on Nebius.</p>
       </div>
     </footer>

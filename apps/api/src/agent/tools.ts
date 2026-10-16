@@ -242,7 +242,10 @@ export const handlers: Record<string, Handler> = {
       if (why) dropped.push({ id, reason: why });
       else kept.push(id);
     });
-    for (const d of dropped) state.candidates.delete(d.id);
+    for (const d of dropped) {
+      state.candidates.delete(d.id);
+      state.dropped.set(d.id, d.reason);
+    }
     return { kept: ids.filter((id) => kept.includes(id)), dropped };
   },
 
@@ -436,3 +439,27 @@ export const TOOL_DEFS: ToolDef[] = [
     },
   },
 ];
+
+/**
+ * Server-side constraint check on titles the model is about to answer with, using the
+ * constraints parsed from the request plus any the model applied. Anything that fails is
+ * marked dropped (and so excluded), whether or not the model called apply_constraints.
+ */
+export async function enforceConstraints(state: TurnState, ids: string[]): Promise<void> {
+  const f = state.constraints;
+  if (!f.maxRuntime && !f.minRuntime && !f.services?.length && !f.yearMin && !f.yearMax && !f.maxRating && (!f.type || f.type === "any")) return;
+  await mapLimit(
+    ids.filter((id) => !state.dropped.has(id) && !state.checked.has(id)),
+    6,
+    async (id) => {
+      state.checked.add(id);
+      const t = state.titles.get(id) ?? (await prisma.title.findUnique({ where: { id } }));
+      if (!t) return;
+      const why = await violates(t, f);
+      if (why) {
+        state.dropped.set(id, why);
+        state.candidates.delete(id);
+      }
+    },
+  );
+}

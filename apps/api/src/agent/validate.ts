@@ -42,7 +42,7 @@ export function validateFinal(raw: unknown, v: ValidationView): Verdict {
   if (invented.length) return { ok: false, reason: `These IDs did not come from a tool result in this turn: ${invented.join(", ")}. Only recommend titles returned by tools.` };
 
   const seen = ids.filter((id) => v.excluded(id));
-  if (seen.length) return { ok: false, reason: `These titles are already seen, rated or disliked by the user: ${seen.join(", ")}. Replace them.` };
+  if (seen.length) return { ok: false, reason: `These titles are already seen, rated or disliked by the user, or failed their constraints (runtime, service, year, rating): ${seen.join(", ")}. Replace them.` };
 
   // "Scored titles first" is enforced by promoteScored() after acceptance, not by rejecting:
   // rejections cost two extra model rounds and still ended in the fallback plan.

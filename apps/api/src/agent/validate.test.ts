@@ -75,3 +75,20 @@ describe("validateFinal", () => {
     expect(validateFinal({ picks: "nope" }, view()).ok).toBe(false);
   });
 });
+
+describe("constraints", () => {
+  it("a title the filters dropped can't be picked or swapped in", () => {
+    const dropped = new Set(["long"]);
+    const v = {
+      allowed: new Set(["a", "b", "x", "long"]),
+      excluded: (id: string) => dropped.has(id),
+      countedN: (id: string) => (id === "x" ? 0 : 200),
+      rank: (id: string) => (id === "long" ? 99 : 1),
+      why: () => "",
+    };
+    expect(validateFinal({ picks: [pick("a"), pick("b"), pick("long")] }, v).ok).toBe(false);
+    const a = { intro: "", picks: [pick("a"), pick("b"), pick("x")], backups: [] as { id: string; why: string }[], question: null };
+    promoteScored(a, v);
+    expect(a.picks.map((p) => p.id)).toEqual(["a", "b", "x"]); // "long" ranks highest but was dropped
+  });
+});

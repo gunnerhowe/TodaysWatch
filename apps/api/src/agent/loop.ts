@@ -10,7 +10,7 @@ import { applyContext, loadUserContext, type UserContext } from "./context.ts";
 import { isVague, parseRequest } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
-import { handlers, TOOL_DEFS, TOOL_LABELS } from "./tools.ts";
+import { enforceConstraints, handlers, TOOL_DEFS, TOOL_LABELS } from "./tools.ts";
 import { promoteScored, validateFinal, type FinalArgs } from "./validate.ts";
 
 const MAX_TOOL_CALLS = 8;
@@ -51,6 +51,8 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
   const run = await prisma.agentRun.create({ data: { sessionId: session.id, model: agentModel(), toolCalls: [], picks: [] } });
   const state = new TurnState(input.profileId, includeSeen, run.id, input.pairId ?? null);
   applyContext(state, ctx);
+  // constraints stated in the request apply even if the model never calls apply_constraints
+  state.constraints = { ...parsed.constraints };
 
   let usage = { in: 0, out: 0, cost: 0 };
   let rejected = 0;
@@ -221,6 +223,7 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
         }
         const ids = raw && typeof raw === "object" ? [...((raw as FinalArgs).picks ?? []), ...((raw as FinalArgs).backups ?? [])].map((p) => p?.id).filter(Boolean) : [];
         await freshCounts(state, ids as string[]);
+        await enforceConstraints(state, ids as string[]);
         const v = validateFinal(raw, {
           allowed: state.allowed,
           excluded: (id) => state.excluded(id),
@@ -229,6 +232,8 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
         state.toolCalls.push({ tool: "final_answer", args: raw, summary: v.ok ? "accepted" : `rejected: ${v.reason}`, ms: 0 });
         if (v.ok) {
           const w = { taste: env.PICK_WEIGHT_TASTE, reception: env.PICK_WEIGHT_RECEPTION };
+          // titles the swap-in may use must pass the constraints too
+          await enforceConstraints(state, [...state.allowed].filter((id) => (state.titles.get(id)?.countedN ?? 0) >= EARLY_MIN));
           promoteScored(v.value, {
             allowed: state.allowed,
             excluded: (id) => state.excluded(id),

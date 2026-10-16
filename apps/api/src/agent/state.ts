@@ -68,8 +68,17 @@ export class TurnState {
     this.candidates.set(t.id, prev ? { ...prev, ...c, taste: c.taste ?? prev.taste, sharedTags: c.sharedTags.length ? c.sharedTags : prev.sharedTags } : { titleId: t.id, ...c });
   }
 
-  /** Disliked titles are always out; seen and liked (rated = watched) are out unless the user opted in. */
+  /** titles apply_constraints removed (too long, wrong service, ...): never a pick or backup */
+  dropped = new Map<string, string>();
+  /** titles already checked against the constraints this turn */
+  checked = new Set<string>();
+
+  /**
+   * Disliked titles are always out; seen and liked (rated = watched) are out unless the user
+   * opted in; and anything that failed the user's own constraints is out, so neither the model
+   * nor the server's swap-in step can pick a 152-minute film for "under 2 hours".
+   */
   excluded(id: string): boolean {
-    return this.dislikedIds.has(id) || (!this.includeSeen && (this.seenIds.has(id) || this.likedIds.has(id)));
+    return this.dislikedIds.has(id) || this.dropped.has(id) || (!this.includeSeen && (this.seenIds.has(id) || this.likedIds.has(id)));
   }
 }

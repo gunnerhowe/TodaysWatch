@@ -35,7 +35,7 @@ export function ScoreHeadline({ score }: { score: Score }) {
       <div>
         {score.state === "EARLY" && <p className="mb-1 inline-block rounded-full border border-line px-2 py-0.5 text-xs uppercase tracking-wider text-accent">Early read</p>}
         <p className="font-display tabular text-6xl font-bold leading-none sm:text-7xl">
-          {score.likedPct}% <span className="text-3xl font-semibold text-dim sm:text-4xl">liked</span>
+          {score.likedPct}% <span className="text-3xl font-semibold text-dim sm:text-4xl">of viewers liked it</span>
         </p>
       </div>
     );
@@ -89,7 +89,8 @@ export function ScoreChip({ score }: { score: Pick<Score, "state" | "likedPct" |
       <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs" title={score.state === "EARLY" ? "Early read: 50 to 149 opinions so far" : undefined}>
         <span className="pat-liked inline-block h-2 w-2 rounded-full" aria-hidden />
         <span className="tabular font-semibold">{score.likedPct}%</span>
-        <span className="text-faint">liked{score.state === "EARLY" ? " · early read" : ""}</span>
+        {/* "of viewers": a bare "liked" read as the visitor's own rating */}
+        <span className="text-faint">of viewers liked{score.state === "EARLY" ? " · early read" : ""}</span>
       </span>
     );
   }

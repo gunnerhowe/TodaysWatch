@@ -89,7 +89,13 @@ export function scoreDto(t: TitleRow, sizes: Baselines): Score {
     summary: showPct ? t.summary : null,
     basicClassifier: t.basicClassifier,
     scoredAt: t.scoredAt?.toISOString() ?? null,
+    incomplete: incompleteDto(t),
   };
+}
+
+function incompleteDto(t: TitleRow): Score["incomplete"] {
+  if (!t.missingSources.length) return null;
+  return { sources: t.missingSources, resumesAt: t.nextRefreshAt?.toISOString() ?? null };
 }
 
 export async function titleDto(t: TitleRow): Promise<Title> {
@@ -118,6 +124,6 @@ export function chipDto(t: TitleRow): TitleChip {
     year: t.year,
     posterPath: t.posterPath,
     genres: t.genres,
-    score: { state: t.scoreState, likedPct: showPct ? t.likedPct : null, countedN: t.countedN },
+    score: { state: t.scoreState, likedPct: showPct ? t.likedPct : null, countedN: t.countedN, incomplete: incompleteDto(t) },
   };
 }

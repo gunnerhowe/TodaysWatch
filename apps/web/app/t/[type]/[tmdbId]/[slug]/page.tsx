@@ -5,7 +5,7 @@ import type { ProgressEvent, Providers, Quote, Rating, Title, TitleChip } from "
 import { LocalTime } from "@/components/LocalTime";
 import { Poster } from "@/components/Poster";
 import { ProgressStream } from "@/components/ProgressStream";
-import { GenreLine, ScoreBar, ScoreHeadline, TrustLine } from "@/components/Score";
+import { GenreLine, IncompleteNote, ScoreBar, ScoreHeadline, TrustLine } from "@/components/Score";
 import { ThumbControls } from "@/components/ThumbControls";
 import { Empty, SkeletonGrid, TileGrid, TitleTile } from "@/components/TitleTile";
 import { runtime, SOURCE_LABEL } from "@/lib/format";
@@ -70,7 +70,8 @@ export default async function TitlePage({ params }: { params: Promise<Params> })
         {scored && <ScoreBar score={s} />}
         <TrustLine score={s} />
         <GenreLine score={s} />
-        {s.state === "INSUFFICIENT" && <p className="text-sm text-dim">Fewer than 50 people who watched it have said what they thought, so we won&apos;t guess.</p>}
+        {s.state === "INSUFFICIENT" && !s.incomplete && <p className="text-sm text-dim">Fewer than 50 people who watched it have said what they thought, so we won&apos;t guess.</p>}
+        <IncompleteNote score={s}>{s.incomplete?.resumesAt && <>, around <LocalTime iso={s.incomplete.resumesAt} /></>}</IncompleteNote>
         {scoring.paused && (
           <p className="surface rounded-xl p-4 text-sm text-dim" role="status">
             Scoring is paused ({scoring.paused.reason}) and resumes around <LocalTime iso={scoring.paused.until} />. {scored ? "The score above is from the last successful run." : "This title will be scored once it resumes."}

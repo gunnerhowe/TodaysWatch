@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { TitleChip } from "@tp/shared";
 import { titleHref } from "@/lib/format";
 import { Poster } from "./Poster";
-import { ScoreChip } from "./Score";
+import { LiveScoreChip } from "./LiveScoreChip";
 
 export function TitleTile({ t, extra }: { t: TitleChip; extra?: React.ReactNode }) {
   return (
@@ -14,7 +14,7 @@ export function TitleTile({ t, extra }: { t: TitleChip; extra?: React.ReactNode 
           {t.year ?? "—"} · {t.type === "tv" ? "TV" : "Movie"}
         </p>
       </Link>
-      <ScoreChip score={t.score} />
+      <LiveScoreChip t={t} />
       {extra}
     </li>
   );

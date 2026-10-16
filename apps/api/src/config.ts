@@ -40,7 +40,7 @@ const EnvZ = z.object({
 
   TMDB_API_KEY: opt,
   YOUTUBE_API_KEY: opt,
-  YOUTUBE_UNIT_RESERVE: num(1000),
+  YOUTUBE_UNIT_RESERVE: num(4000), // kept for live lookups; nightly pre-scoring stops before it (~19 new titles a day)
   YOUTUBE_DAILY_UNITS: num(10000),
   BLUESKY_HANDLE: opt,
   BLUESKY_APP_PASSWORD: opt,

@@ -15,12 +15,12 @@ export function clampWords(s: string, max: number): string {
   return `${w.slice(0, max).join(" ").replace(/[,;:]$/, "")}.`;
 }
 
-export function spokenScore(s: Pick<Score, "state" | "likedPct" | "countedN">): string {
+export function spokenScore(s: Pick<Score, "state" | "likedPct" | "countedN" | "incomplete">): string {
   if ((s.state === "FULL" || s.state === "EARLY") && s.likedPct !== null) {
     const base = `${numberToWords(s.likedPct)} percent of viewers liked it`;
     return s.state === "EARLY" ? `early read, ${base}` : base;
   }
-  if (s.state === "PENDING") return "we're still reading what people said";
+  if (s.state === "PENDING" || (s.state === "INSUFFICIENT" && s.incomplete)) return "we're still reading what people said";
   return "there isn't enough talk about it yet";
 }
 

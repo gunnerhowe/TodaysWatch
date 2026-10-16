@@ -136,7 +136,7 @@ pnpm qloo:smoke           # find_tags, search, recommend, rank, entity_tags, tre
 pnpm llm:models           # list Nemotron IDs on Token Factory
 pnpm llm:smoke            # 20 scripted requests through the real agent loop (gate: 19/20)
 pnpm --filter @tp/api agent:try "something funny under 2 hours"   # one real agent run, printed step by step
-pnpm --filter @tp/api prescore   # one pre-scoring batch (also runs nightly at 07:00 UTC)
+pnpm --filter @tp/api prescore   # one pre-scoring batch (also runs nightly at 12:15 am Pacific, after the YouTube quota resets)
 pnpm eval agent|classifier|stability|tmdb|labelset|walkthrough
 ```
 
@@ -159,7 +159,7 @@ pnpm eval agent|classifier|stability|tmdb|labelset|walkthrough
 - English only. X, TikTok, Facebook, Instagram, Letterboxd, IMDb and Rotten Tomatoes aren't used (closed, paid, or no scraping), so some titles have little talk.
 - Qloo affinities describe groups, not individuals.
 - Optional sign-in (Google/GitHub, merging the guest profile) is not wired into the web app yet; the API's merge endpoint exists. Guest profiles live on one device.
-- A new title takes a minute or two to score (collect, classify, second opinion). Picks can include titles marked **score pending** when too few scored titles fit the request; they fill in as scoring finishes. Nightly pre-scoring keeps popular titles ready.
+- A new title takes a minute or two to score (collect, classify, second opinion). YouTube allows about 10,000 quota units a day (a new title costs about 210); 4,000 are kept for live lookups. When they run out, titles are scored from the other sources, marked "More opinions coming", and re-read after the reset at midnight Pacific. Picks can include titles marked **score pending** when too few scored titles fit the request; they fill in as scoring finishes. Nightly pre-scoring keeps popular titles ready.
 - Content requests like "not gory" are passed to the agent and Qloo as preferences, not as a hard filter, so a pick can still be intense.
 - An agent request takes roughly 30 seconds to a couple of minutes.
 - Qloo's `compare_audiences` often returns nothing for two people with few ratings, so "what your tastes share" can be empty.

@@ -13,16 +13,39 @@ export function utcDay(d = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
+const PACIFIC = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** The calendar day in Pacific time, as a UTC-midnight Date (Google's YouTube quota day). */
+export function pacificDay(d = new Date()): Date {
+  const [y, m, day] = PACIFIC.format(d).split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, day!));
+}
+
+/** When Google next resets the YouTube quota: midnight Pacific (07:00 or 08:00 UTC). */
+export function nextYoutubeReset(now = new Date()): Date {
+  const tomorrow = pacificDay(now).getTime() + 86_400_000;
+  for (const h of [7, 8]) {
+    const t = new Date(tomorrow + h * 3_600_000);
+    if (pacificDay(t).getTime() === tomorrow && pacificDay(new Date(t.getTime() - 1)).getTime() !== tomorrow) return t;
+  }
+  return new Date(tomorrow + 8 * 3_600_000);
+}
+
+// YouTube's quota resets at midnight Pacific, not UTC. Counting it on UTC days reset our count
+// at 7 pm Central while Google still had the day's usage, so live lookups failed for 7 hours.
+const dayFor = (provider: Provider) => (provider === "youtube_units" ? pacificDay() : utcDay());
+
 export async function usedToday(provider: Provider): Promise<number> {
-  const row = await prisma.usageLedger.findUnique({ where: { day_provider: { day: utcDay(), provider } } });
+  const row = await prisma.usageLedger.findUnique({ where: { day_provider: { day: dayFor(provider), provider } } });
   return row?.used ?? 0;
 }
 
 export async function record(provider: Provider, amount: number): Promise<void> {
   if (!amount) return;
+  const day = dayFor(provider);
   await prisma.usageLedger.upsert({
-    where: { day_provider: { day: utcDay(), provider } },
-    create: { day: utcDay(), provider, used: amount },
+    where: { day_provider: { day, provider } },
+    create: { day, provider, used: amount },
     update: { used: { increment: amount } },
   });
 }

@@ -57,6 +57,7 @@ model Title {
   qlooEntityId    String?
   qlooMatchConf   Float?
   youtubeVideoIds String[]        @default([]) // cached so refreshes skip search.list
+  missingSources  String[]        @default([]) // sources skipped for quota last run; re-read after the reset
   // current score, copied here for one-query reads
   scoreState      ScoreState      @default(NONE)
   likedPct        Int?

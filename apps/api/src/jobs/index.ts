@@ -73,8 +73,10 @@ export async function startJobs(log: (msg: string) => void): Promise<void> {
   for (const t of orphaned) await enqueueScore(t.id, true);
   if (orphaned.length) log(`requeued ${orphaned.length} titles left in progress by a restart`);
 
-  // 07:00 UTC = 1-2 am Central. Pre-scoring runs right after baselines are refreshed.
-  await boss.schedule(Q.nightly, "0 7 * * *", {}, { tz: "UTC" });
+  // 12:15 am Pacific (2:15 am Central): just after Google resets the YouTube quota, all year
+  // (a fixed UTC time falls before the reset once daylight saving ends). Pre-scoring runs right
+  // after baselines are refreshed.
+  await boss.schedule(Q.nightly, "15 0 * * *", {}, { tz: "America/Los_Angeles" });
   log("jobs started");
 }
 

@@ -41,7 +41,7 @@ export function ScoreHeadline({ score }: { score: Score }) {
     );
   }
   if (score.state === "PENDING") return <p className="font-display text-4xl font-bold text-dim">Reading what people said…</p>;
-  if (score.state === "INSUFFICIENT") return <p className="font-display text-4xl font-bold text-dim">Not enough talk yet</p>;
+  if (score.state === "INSUFFICIENT") return <p className="font-display text-4xl font-bold text-dim">{score.incomplete ? "More opinions coming" : "Not enough talk yet"}</p>;
   return <p className="font-display text-4xl font-bold text-dim">Not scored yet</p>;
 }
 
@@ -69,16 +69,32 @@ export function GenreLine({ score }: { score: Score }) {
   );
 }
 
+const SOURCE_NAMES: Record<string, string> = { YOUTUBE: "YouTube", BLUESKY: "Bluesky", REDDIT: "Reddit", TMDB_REVIEW: "TMDB", TRAKT: "Trakt" };
+
+/** Why a score is partial: a source was skipped for quota and is read again after the reset. */
+export function IncompleteNote({ score, children }: { score: Score; children?: React.ReactNode }) {
+  if (!score.incomplete) return null;
+  const names = score.incomplete.sources.map((s) => SOURCE_NAMES[s] ?? s).join(" and ");
+  return (
+    <p className="text-sm text-dim">
+      We haven&apos;t read {names} comments for this one yet: today&apos;s {names} allowance is used up. {score.state === "INSUFFICIENT" ? "The score appears" : "The score updates"} once they&apos;re read{children}.
+    </p>
+  );
+}
+
 /** Compact chip for cards and rows. */
-export function ScoreChip({ score }: { score: Pick<Score, "state" | "likedPct" | "countedN"> }) {
+export function ScoreChip({ score }: { score: Pick<Score, "state" | "likedPct" | "countedN" | "incomplete"> }) {
   if ((score.state === "FULL" || score.state === "EARLY") && score.likedPct !== null) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs" title={score.state === "EARLY" ? "Early read: 50 to 149 opinions so far" : undefined}>
         <span className="pat-liked inline-block h-2 w-2 rounded-full" aria-hidden />
         <span className="tabular font-semibold">{score.likedPct}%</span>
-        <span className="text-faint">liked{score.state === "EARLY" ? " · early" : ""}</span>
+        <span className="text-faint">liked{score.state === "EARLY" ? " · early read" : ""}</span>
       </span>
     );
   }
-  return <span className="inline-flex rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs text-faint">{score.state === "PENDING" ? "Scoring…" : "Not enough talk yet"}</span>;
+  // NONE means we simply haven't looked yet; only a finished, complete run can say "not enough talk".
+  const label =
+    score.state === "PENDING" ? "Scoring…" : score.state === "INSUFFICIENT" ? (score.incomplete ? "More opinions coming" : "Not enough talk yet") : "Not scored yet";
+  return <span className="inline-flex rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs text-faint">{label}</span>;
 }

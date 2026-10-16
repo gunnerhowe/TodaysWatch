@@ -36,6 +36,8 @@ export const ScoreZ = z.object({
   summary: z.string().nullable(),
   basicClassifier: z.boolean(),
   scoredAt: z.string().nullable(),
+  /** a source was skipped for quota on the last run; more opinions are read after `resumesAt` */
+  incomplete: z.object({ sources: z.array(z.string()), resumesAt: z.string().nullable() }).nullable().optional(),
 });
 export type Score = z.infer<typeof ScoreZ>;
 
@@ -108,7 +110,7 @@ export const TitleChipZ = z.object({
   year: z.number().int().nullable(),
   posterPath: z.string().nullable(),
   genres: z.array(z.string()),
-  score: ScoreZ.pick({ state: true, likedPct: true, countedN: true }),
+  score: ScoreZ.pick({ state: true, likedPct: true, countedN: true, incomplete: true }),
 });
 export type TitleChip = z.infer<typeof TitleChipZ>;
 

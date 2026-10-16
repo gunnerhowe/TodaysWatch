@@ -27,7 +27,9 @@ async function demoTitles(): Promise<Candidate[]> {
 }
 
 async function candidates(): Promise<Candidate[]> {
-  const out: Candidate[] = [...(await demoTitles())];
+  // First: titles someone already looked up that were scored without a source (out of quota).
+  const incomplete = await prisma.title.findMany({ where: { NOT: { missingSources: { isEmpty: true } } }, select: { type: true, tmdbId: true }, orderBy: { updatedAt: "desc" } });
+  const out: Candidate[] = [...incomplete.map((t) => ({ kind: (t.type === "MOVIE" ? "movie" : "tv") as Kind, tmdbId: t.tmdbId })), ...(await demoTitles())];
   for (const kind of ["movie", "tv"] as const) {
     for (const list of ["popular", "top_rated"] as const)
       for (let page = 1; page <= 3; page++) out.push(...(await tmdb.listTitles(kind, list, page)).map((r) => ({ kind, tmdbId: r.tmdbId })));

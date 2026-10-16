@@ -2,7 +2,7 @@ import type { Mention, Title } from "@prisma/client";
 import { computeScore, genrePercentiles, isCounted, nextRefreshAt, scoreFromCounts } from "@tp/scoring";
 import { env, sourcesEnabled } from "../config.ts";
 import { prisma } from "../db.ts";
-import { CapExceededError, ensureBudget } from "../lib/ledger.ts";
+import { CapExceededError, ensureBudget, nextYoutubeReset } from "../lib/ledger.ts";
 import * as bluesky from "../sources/bluesky.ts";
 import * as reddit from "../sources/reddit.ts";
 import * as tmdb from "../sources/tmdb.ts";
@@ -35,11 +35,12 @@ function ref(t: Title): TitleRef {
   return { id: t.id, tmdbId: t.tmdbId, type: t.type, name: t.name, year: t.year, releaseDate: t.releaseDate };
 }
 
-async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ items: RawItem[]; notes: string[]; failed: boolean }> {
+async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ items: RawItem[]; notes: string[]; failed: boolean; missing: string[] }> {
   const on = sourcesEnabled();
   const r = ref(t);
   const items: RawItem[] = [];
   const notes: string[] = [];
+  const missing: string[] = [];
   let failed = false;
   const add = (list: RawItem[]) => {
     items.push(...list);
@@ -53,7 +54,10 @@ async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ item
       notes.push(`${name}: ${detail ?? `${items.length - before} items`}`);
     } catch (e) {
       if (e instanceof SourceDisabledError) return;
-      failed = true;
+      // Out of quota (our budget or Google's): the source has plenty to say, we just can't read
+      // it until the reset. Recorded so the score isn't called "not enough talk".
+      if (e instanceof CapExceededError || /quota/i.test(e instanceof Error ? e.message : "")) missing.push(name.toUpperCase());
+      else failed = true;
       const msg = `${name} failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`;
       notes.push(msg);
       console.warn(`[collect] ${t.name} (${t.year}) ${msg}`);
@@ -88,7 +92,7 @@ async function collect(t: Title, live: boolean, p: ProgressLine): Promise<{ item
   if (on.BLUESKY) await attempt("bluesky", async () => add(await bluesky.searchPosts(r)));
   if (on.TMDB_REVIEW) await attempt("tmdb_reviews", async () => add(await tmdb.fetchReviews(typeToKind(t.type), t.tmdbId)));
   if (on.TRAKT) await attempt("trakt", async () => add(await trakt.fetchComments(r)));
-  return { items, notes, failed };
+  return { items, notes, failed, missing };
 }
 
 export interface ScoreRunResult {
@@ -131,7 +135,7 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
   p.emit("resolving", "Looking for discussion");
 
   try {
-    const { items: raw, notes, failed } = await collect(t, opts.live, p);
+    const { items: raw, notes, failed, missing } = await collect(t, opts.live, p);
     p.emit("cleaning", "Filtering");
     const { items: clean } = cleanItems(raw, { releaseDate: t.releaseDate, cap: 1000, title: { name: t.name, year: t.year } });
 
@@ -204,6 +208,11 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
     const result = await recomputeScore(t.id);
     // A source errored (not just "found nothing"): try again in 6 hours instead of waiting days.
     if (failed) await prisma.title.update({ where: { id: t.id }, data: { nextRefreshAt: new Date(Date.now() + 6 * 3_600_000) } });
+    // A source skipped for quota: re-read just after it resets (YouTube: midnight Pacific).
+    await prisma.title.update({
+      where: { id: t.id },
+      data: { missingSources: missing, ...(missing.length ? { nextRefreshAt: new Date(nextYoutubeReset().getTime() + 5 * 60_000) } : {}) },
+    });
     p.classified = result.counted;
     p.emit("ready", "Score ready", notes);
     return { titleId: t.id, collected: raw.length, cleaned: clean.length, classified: outcome.labels.length, counted: result.counted, state: result.state, notes };

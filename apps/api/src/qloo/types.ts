@@ -152,3 +152,31 @@ export function tagsOf(r: QlooResult): QlooTag[] {
 export function issuesOf(r: QlooResult): ResolutionIssue[] {
   return r.resolution?.issues ?? [];
 }
+
+/**
+ * Tag kinds that describe a movie or show to a viewer. entity_tags also returns music genres,
+ * brand genres, audiences and brand-marketing themes ("Brand Building"), which made "why it
+ * fits" read like "China Union Pay". Kinds checked against real responses (Hereditary, 2026-10-16).
+ */
+const DESCRIPTIVE_TAG = /^urn:tag:(genre|subgenre|style|archetype|motif|keyword|mood|plot):qloo$/;
+
+function tidy(name: string): string {
+  const n = name.trim();
+  // "DEATH" -> "Death"; leave mixed-case names ("Avant-Garde", "'80s") alone
+  return n === n.toUpperCase() && /[A-Z]{2,}/.test(n) ? n.charAt(0) + n.slice(1).toLowerCase() : n;
+}
+
+/** Descriptive tags only, tidied and de-duplicated (case-insensitive), in Qloo's order. */
+export function descriptiveTags(r: QlooResult): QlooTag[] {
+  const seen = new Set<string>();
+  const out: QlooTag[] = [];
+  for (const t of tagsOf(r)) {
+    const kind = t.type ?? (t.id ? t.id.split(":").slice(0, 4).join(":") : "");
+    if (!t.name || !DESCRIPTIVE_TAG.test(kind)) continue;
+    const name = tidy(t.name);
+    if (seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push({ ...t, name });
+  }
+  return out;
+}

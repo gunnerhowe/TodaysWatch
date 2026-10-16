@@ -2,7 +2,7 @@ import type { Title } from "@prisma/client";
 import { comparePairFit, pairFit, rankToTaste } from "@tp/scoring";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
-import { entitiesOf, tagsOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
+import { descriptiveTags, entitiesOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
 import type { TurnState } from "./state.ts";
 
 const qType = (k: "MOVIE" | "TV"): InsightsType => (k === "MOVIE" ? "movie" : "tv_show");
@@ -28,7 +28,7 @@ function namesOf(r: QlooResult | null, max: number): string[] {
       if (list.length) return list.slice(0, max);
     }
   }
-  return tagsOf(r)
+  return descriptiveTags(r)
     .map((t) => t.name ?? "")
     .filter(Boolean)
     .slice(0, max);

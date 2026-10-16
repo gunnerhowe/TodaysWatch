@@ -6,7 +6,7 @@ import { enqueueScore } from "../jobs/index.ts";
 import type { ToolDef } from "../llm/index.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
-import { entitiesOf, issuesOf, tagsOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
+import { descriptiveTags, entitiesOf, issuesOf, tagsOf, type InsightsType, type QlooResult } from "../qloo/types.ts";
 import { getDetails, getProviders } from "../sources/tmdb.ts";
 import { baselineSizes, genreLine, isStale, typeToKind } from "../titles.ts";
 import { loadUserContext, type UserContext } from "./context.ts";
@@ -266,10 +266,10 @@ export const handlers: Record<string, Handler> = {
       const et = qType(t.type);
       if (!likedTagsByType.has(et)) {
         const theirs = likedIds.length ? await callQloo("qloo_entity_tags", { entities: likedIds, entity_type: et, limit: 20 }, state.qlooCtx()) : null;
-        likedTagsByType.set(et, new Set((theirs ? tagsOf(theirs) : []).map((x) => (x.name ?? "").toLowerCase())));
+        likedTagsByType.set(et, new Set((theirs ? descriptiveTags(theirs) : []).map((x) => (x.name ?? "").toLowerCase())));
       }
       const mine = await callQloo("qloo_entity_tags", { entities: [m.entityId], entity_type: et, limit: 15 }, state.qlooCtx());
-      const titleTags = tagsOf(mine).map((x) => x.name ?? "").filter(Boolean);
+      const titleTags = descriptiveTags(mine).map((x) => x.name ?? "").filter(Boolean);
       const likedTags = likedTagsByType.get(et)!;
       const shared = titleTags.filter((n) => likedTags.has(n.toLowerCase())).slice(0, 4);
       const c = state.candidates.get(id);

@@ -6,7 +6,7 @@ import { existingProfile, profileFor, requireCaller } from "../lib/auth.ts";
 import { sha256, sixDigitCode } from "../lib/hash.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity } from "../qloo/match.ts";
-import { tagsOf } from "../qloo/types.ts";
+import { descriptiveTags } from "../qloo/types.ts";
 import { chipDto } from "../titles.ts";
 
 export async function profileRoutes(app: FastifyInstance) {
@@ -129,7 +129,7 @@ async function tasteTags(liked: { id: string; type: "MOVIE" | "TV"; qlooEntityId
   const group = movies.length >= shows.length ? movies : shows;
   if (group.length < 2) return [];
   const r = await callQloo("qloo_entity_tags", { entities: group.map((t) => t.qlooEntityId!), entity_type: group === movies ? "movie" : "tv_show", limit: 8 });
-  return tagsOf(r)
+  return descriptiveTags(r)
     .filter((t) => t.name)
     .slice(0, 8)
     .map((t) => ({ id: t.id ?? t.name!, name: t.name!, count: group.length }));

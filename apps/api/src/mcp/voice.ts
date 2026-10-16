@@ -30,7 +30,10 @@ export function spokenPick(p: PickCard, i: number): string {
   // "Think slow burn and folk horror." Tags are labels, not adjectives, so "It's Family" read badly.
   const tags = p.sharedTags.map((t) => t.replace(/[,.;:]+$/, "").trim()).filter(Boolean).slice(0, 2);
   const why = tags.length ? `Think ${tags.join(" and ").toLowerCase()}.` : "";
-  return clampWords(`${ord}, ${p.name}${year}: ${spokenScore(p.score)}. ${why}`, 25);
+  // A score-pending pick is queued for scoring, so "not enough talk" would be wrong (it was said
+  // about A Quiet Place, one of 2018's most-discussed films, before it had been scored).
+  const score = p.scorePending ? "we're still reading what people said" : spokenScore(p.score);
+  return clampWords(`${ord}, ${p.name}${year}: ${score}. ${why}`, 25);
 }
 
 export function spokenAnswer(a: FinalAnswer): string {

@@ -64,3 +64,11 @@ describe("spoken tags", () => {
     expect(s).not.toMatch(/,\./);
   });
 });
+
+describe("score-pending picks", () => {
+  it("says the title is being read, not that nobody talks about it", () => {
+    const s = spokenPick(card({ name: "A Quiet Place", scorePending: true, score: { ...card().score, state: "INSUFFICIENT", likedPct: null, countedN: 12 } }), 1);
+    expect(s).toContain("we're still reading what people said");
+    expect(s).not.toContain("enough talk");
+  });
+});

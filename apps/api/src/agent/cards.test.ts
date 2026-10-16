@@ -44,3 +44,15 @@ describe("only close examples", () => {
     expect(why).toBe("A comedy pick, as you asked.");
   });
 });
+
+describe("single-genre picks", () => {
+  const likes = [
+    { name: "Modern Family", genres: ["Comedy"], type: "TV" as const },
+    { name: "Moana", genres: ["Animation", "Family", "Comedy"], type: "MOVIE" as const },
+  ];
+  it("a sitcom can cite a sitcom, not an animated movie", () => {
+    const used = new Set<string>(["Modern Family"]);
+    expect(groundedWhy({ genres: ["Comedy"], type: "TV" }, { sharedTags: [] }, likes, ["comedy"], used)).toBe("A comedy pick, as you asked; you liked Modern Family.");
+    expect(groundedWhy({ genres: ["Comedy"], type: "MOVIE" }, { sharedTags: [] }, likes, ["comedy"])).toBe("A comedy pick, as you asked.");
+  });
+});

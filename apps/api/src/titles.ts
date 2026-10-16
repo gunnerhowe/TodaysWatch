@@ -124,6 +124,6 @@ export function chipDto(t: TitleRow): TitleChip {
     year: t.year,
     posterPath: t.posterPath,
     genres: t.genres,
-    score: { state: t.scoreState, likedPct: showPct ? t.likedPct : null, countedN: t.countedN, incomplete: incompleteDto(t) },
+    score: { state: t.scoreState, likedPct: showPct ? t.likedPct : null, dislikedPct: showPct ? t.dislikedPct : null, countedN: t.countedN, incomplete: incompleteDto(t) },
   };
 }

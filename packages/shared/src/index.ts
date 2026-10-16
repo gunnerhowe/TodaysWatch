@@ -110,7 +110,7 @@ export const TitleChipZ = z.object({
   year: z.number().int().nullable(),
   posterPath: z.string().nullable(),
   genres: z.array(z.string()),
-  score: ScoreZ.pick({ state: true, likedPct: true, countedN: true, incomplete: true }),
+  score: ScoreZ.pick({ state: true, likedPct: true, dislikedPct: true, countedN: true, incomplete: true }),
 });
 export type TitleChip = z.infer<typeof TitleChipZ>;
 

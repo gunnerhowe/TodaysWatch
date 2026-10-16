@@ -16,7 +16,7 @@ Critics and star ratings tell you what reviewers think. Tonight's Pick reads wha
 
 | Flow | Where |
 |---|---|
-| **Look it up:** search a title, see the Real People Score ("74% of viewers liked it", the Liked / Mixed / Disliked bar, sample size and sources, genre line, what people say with linked quotes), rate it | `/` → `/t/movie/…` |
+| **Look it up:** search a title, see the Real People Score (a green dot with the share who liked it and a red dot with the share who didn't, the Liked / Mixed / Disliked bar, sample size and sources, genre line, what people say with linked quotes), rate it | `/` → `/t/movie/…` |
 | **Ask for a pick:** "something funny, under 2 hours, on Netflix" → 3 unseen picks that meet every constraint, with reasons, where to watch (or "rent only"), plus 2 backups; open **How we picked this** to see every Qloo call | `/pick` |
 | **Pick for two:** send a link, they rate 5 titles as a guest, get 3 picks the less-excited person still likes | `/pair` |
 | **Ask by voice:** a real MCP server for Alexa+, plus a simulated Alexa+ page in the browser | `/mcp`, `/alexa` |

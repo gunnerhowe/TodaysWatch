@@ -34,8 +34,16 @@ export function ScoreHeadline({ score }: { score: Score }) {
     return (
       <div>
         {score.state === "EARLY" && <p className="mb-1 inline-block rounded-full border border-line px-2 py-0.5 text-xs uppercase tracking-wider text-accent">Early read</p>}
-        <p className="font-display tabular text-6xl font-bold leading-none sm:text-7xl">
-          {score.likedPct}%<span className="mt-1 block text-2xl font-semibold text-dim sm:text-3xl">of viewers liked it</span>
+        {/* Dots, not words: a bare "liked" read as the visitor's own rating. The bar below labels each part. */}
+        <p className="font-display tabular flex items-center gap-6 text-6xl font-bold leading-none sm:text-7xl" aria-label={`${score.likedPct}% liked, ${score.dislikedPct ?? 0}% disliked`}>
+          <span className="flex items-center gap-3">
+            <span className="pat-liked inline-block h-5 w-5 rounded-full" aria-hidden />
+            {score.likedPct}%
+          </span>
+          <span className="flex items-center gap-3 text-dim">
+            <span className="pat-disliked inline-block h-5 w-5 rounded-full" aria-hidden />
+            {score.dislikedPct ?? 0}%
+          </span>
         </p>
       </div>
     );
@@ -83,19 +91,23 @@ export function IncompleteNote({ score, children }: { score: Score; children?: R
 }
 
 /** Compact chip for cards and rows. */
-export function ScoreChip({ score }: { score: Pick<Score, "state" | "likedPct" | "countedN" | "incomplete"> }) {
+export function ScoreChip({ score }: { score: Pick<Score, "state" | "likedPct" | "countedN" | "incomplete"> & { dislikedPct?: number | null } }) {
   if ((score.state === "FULL" || score.state === "EARLY") && score.likedPct !== null) {
+    // Dots, not words: a bare "liked" read as the visitor's own rating.
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs" title={score.state === "EARLY" ? "Early read: 50 to 149 opinions so far" : undefined}>
-        <span className="pat-liked inline-block h-2 w-2 rounded-full" aria-hidden />
-        <span className="tabular font-semibold">{score.likedPct}%</span>
-        {/* "of viewers": a bare "liked" read as the visitor's own rating */}
-        <span className="text-faint">of viewers liked{score.state === "EARLY" ? " · early read" : ""}</span>
+      <span className="tabular inline-flex items-center gap-2 rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs font-semibold" aria-label={`${score.likedPct}% liked, ${score.dislikedPct ?? 0}% disliked`}>
+        <span className="inline-flex items-center gap-1">
+          <span className="pat-liked inline-block h-2 w-2 rounded-full" aria-hidden />
+          {score.likedPct}%
+        </span>
+        <span className="inline-flex items-center gap-1 text-dim">
+          <span className="pat-disliked inline-block h-2 w-2 rounded-full" aria-hidden />
+          {score.dislikedPct ?? 0}%
+        </span>
       </span>
     );
   }
   // NONE means we simply haven't looked yet; only a finished, complete run can say "not enough talk".
-  const label =
-    score.state === "PENDING" ? "Scoring…" : score.state === "INSUFFICIENT" ? (score.incomplete ? "More opinions coming" : "Not enough talk yet") : "Not scored yet";
+  const label = score.state === "PENDING" ? "Scoring…" : score.state === "INSUFFICIENT" && !score.incomplete ? "Not enough talk yet" : "Not scored yet";
   return <span className="inline-flex rounded-full bg-[var(--bg-3)] px-2 py-0.5 text-xs text-faint">{label}</span>;
 }

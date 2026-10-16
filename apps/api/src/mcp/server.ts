@@ -11,6 +11,7 @@ import { sha256 } from "../lib/hash.ts";
 import { searchTitles } from "../sources/tmdb.ts";
 import { titleDto, upsertTitle } from "../titles.ts";
 import { enqueueScore } from "../jobs/index.ts";
+import { ratingChanged } from "../pipeline/score.ts";
 import { isStale } from "../titles.ts";
 import { chatLimiter } from "../routes/limits.ts";
 import { spokenAnswer, spokenScore } from "./voice.ts";
@@ -145,6 +146,7 @@ function buildServer(getCtx: () => { sid: string; s: SessionCtx }) {
         create: { profileId: s.profileId, titleId: p.titleId, value: p.value, seen: true },
         update: { value: p.value, seen: true },
       });
+      ratingChanged(p.titleId);
       return say(`Saved a thumbs ${p.value === "UP" ? "up" : "down"} for ${p.name}.`, { saved: true });
     }),
   );

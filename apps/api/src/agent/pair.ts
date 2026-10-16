@@ -1,11 +1,19 @@
 import type { Title } from "@prisma/client";
-import { comparePairFit, pairFit, rankToTaste } from "@tp/scoring";
+import { comparePairFit, groupFit, rankToTaste } from "@tp/scoring";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
 import { descriptiveTags, entitiesOf, tidyTagName, type InsightsType, type QlooResult } from "../qloo/types.ts";
 import type { TurnState } from "./state.ts";
 
 const qType = (k: "MOVIE" | "TV"): InsightsType => (k === "MOVIE" ? "movie" : "tv_show");
+
+/** One person in a pick-together group (2-5 people). The first is the person asking. */
+export interface GroupPerson {
+  who: string;
+  liked: Title[];
+  seen: Title[];
+  disliked: Title[];
+}
 
 async function ids(state: TurnState, titles: Title[], max: number): Promise<string[]> {
   const out: string[] = [];
@@ -38,46 +46,42 @@ function namesOf(r: QlooResult | null, max: number): string[] {
 }
 
 /**
- * Two-Person Pick: build candidates from both people's likes, rank each candidate's fit for
- * each person separately with qloo_rank, and keep the titles with the best WORSE fit. The pick
- * is the one the less-excited person still likes. Titles either person has seen are removed.
+ * Group Pick (2-5 people): build candidates from everyone's likes, rank each candidate for each
+ * person separately with qloo_rank, and keep the titles with the best WORST fit: the pick is the
+ * one the least-excited person still likes. Anything anyone has seen or disliked is removed.
  */
-export async function pairCandidates(
-  state: TurnState,
-  aLiked: Title[],
-  bLiked: Title[],
-  bSeen: Title[],
-  bNamed: string[],
-  type: "movie" | "tv" | "any",
-) {
-  for (const t of bSeen) state.seenIds.add(t.id);
-  for (const t of bLiked) state.seenIds.add(t.id);
-
-  let aSig = await ids(state, aLiked, 5);
-  let bSig = [...(await ids(state, bLiked, 5)), ...bNamed.slice(0, 5)].slice(0, 5);
-  // Only one person has any likes (often a new voice user): rank for that taste alone and say
-  // so, rather than stopping at a question the speaker may already have answered.
-  const oneSided: "a" | "b" | null = aSig.length && !bSig.length ? "a" : !aSig.length && bSig.length ? "b" : null;
-  if (oneSided === "a") bSig = aSig;
-  if (oneSided === "b") aSig = bSig;
-  if (aSig.length === 0 || bSig.length === 0) {
-    return {
-      status: "needs_input",
-      question: { text: "What's a movie or show the other person loved?", options: ["Name one out loud", "Send them a pair link", "Just pick for me"] },
-    };
+export async function groupCandidates(state: TurnState, people: GroupPerson[], type: "movie" | "tv" | "any") {
+  for (const p of people) {
+    for (const t of [...p.seen, ...p.liked]) state.seenIds.add(t.id);
+    for (const t of p.disliked) state.dislikedIds.add(t.id);
   }
 
+  // Per-person taste signals. People with no likes yet can't be ranked for; they're left out
+  // of the ranking (and named in the result) rather than blocking the whole group.
+  const sigs = await Promise.all(people.map((p) => ids(state, p.liked, 5)));
+  const ranked = people.map((p, i) => ({ ...p, sig: sigs[i]! })).filter((p) => p.sig.length > 0);
+  const unrated = people.filter((_, i) => sigs[i]!.length === 0).map((p) => p.who);
+  if (ranked.length === 0) {
+    return {
+      status: "needs_input",
+      question: { text: "What's a movie or show one of you loved?", options: ["Name one out loud", "Send them the group link", "Just pick for me"] },
+    };
+  }
+  const oneSided = ranked.length === 1 && people.length > 1;
+
+  // Combined signal for the "everyone together" pool: a fair share from each person.
+  const per = Math.max(1, Math.floor(10 / ranked.length));
+  const combined = [...new Set(ranked.flatMap((p) => p.sig.slice(0, per)))].slice(0, 10);
+
   const kinds: ("MOVIE" | "TV")[] = type === "movie" ? ["MOVIE"] : type === "tv" ? ["TV"] : ["MOVIE", "TV"];
-  const results: { title: Title; fitA: number; fitB: number; posA: number; posB: number; n: number }[] = [];
+  const results: { title: Title; fits: number[]; pos: number[]; n: number }[] = [];
   for (const kind of kinds) {
-    // A balanced pool: titles from each person's taste and from both together. Recommending
-    // only from the combined signals let the stronger taste dominate (a horror fan plus a
-    // Paddington 2 fan got three horror picks), and rank positions are relative, so a pool
-    // of one genre always produces a "best fit" for the other person.
+    // A balanced pool: titles from everyone together and from each person's own taste.
+    // Recommending only from the combined signals let the strongest taste dominate (a horror fan
+    // plus a Paddington 2 fan got three horror picks).
     const recs = await Promise.all([
-      callQloo("qloo_recommend", { target_type: qType(kind), signals: [...aSig, ...bSig], limit: 12 }, state.qlooCtx()),
-      callQloo("qloo_recommend", { target_type: qType(kind), signals: aSig, limit: 8 }, state.qlooCtx()),
-      callQloo("qloo_recommend", { target_type: qType(kind), signals: bSig, limit: 8 }, state.qlooCtx()),
+      callQloo("qloo_recommend", { target_type: qType(kind), signals: combined, limit: 12 }, state.qlooCtx()),
+      ...(ranked.length > 1 ? ranked.map((p) => callQloo("qloo_recommend", { target_type: qType(kind), signals: p.sig, limit: 8 }, state.qlooCtx())) : []),
     ]);
     const pools: Title[][] = [];
     for (const rec of recs) {
@@ -88,73 +92,64 @@ export async function pairCandidates(
       }
       pools.push(pool);
     }
-    // 4 from both together, 3 from each person (qloo_rank takes at most 10 options)
+    // qloo_rank takes at most 10 options: 4 from everyone together, then take turns per person.
     const shortlist: Title[] = [];
-    const take = (pool: Title[], n: number) => {
-      for (const t of pool) {
-        if (n <= 0 || shortlist.length >= 10) break;
-        if (!shortlist.some((x) => x.id === t.id)) {
-          shortlist.push(t);
-          n--;
-        }
-      }
+    const add = (t: Title) => {
+      if (shortlist.length < 10 && !shortlist.some((x) => x.id === t.id)) shortlist.push(t);
     };
-    take(pools[0] ?? [], 4);
-    take(pools[1] ?? [], 3);
-    take(pools[2] ?? [], 3);
-    for (const pool of pools) take(pool, 10 - shortlist.length);
+    for (const t of (pools[0] ?? []).slice(0, 4)) add(t);
+    const own = pools.slice(1);
+    for (let round = 0; shortlist.length < 10 && round < 8; round++) for (const pool of own) if (pool[round]) add(pool[round]!);
+    for (const t of pools[0] ?? []) add(t);
     if (shortlist.length < 2) {
-      shortlist.forEach((t) => results.push({ title: t, fitA: 0.5, fitB: 0.5, posA: 0, posB: 0, n: 1 }));
+      shortlist.forEach((t) => results.push({ title: t, fits: ranked.map(() => 0.5), pos: ranked.map(() => 0), n: 1 }));
       continue;
     }
     const opts = await ids(state, shortlist, 10);
-    const [ra, rb] = await Promise.all([
-      callQloo("qloo_rank", { options: opts, option_type: qType(kind), signals: aSig }, state.qlooCtx()),
-      callQloo("qloo_rank", { options: opts, option_type: qType(kind), signals: bSig }, state.qlooCtx()),
-    ]);
-    const order = (r: QlooResult) => entitiesOf(r).map((e) => e.entity_id);
-    const oa = order(ra);
-    const ob = order(rb);
+    // Rank scores from separate calls aren't comparable, so each person's ORDER is used, not scores.
+    const orders = (await Promise.all(ranked.map((p) => callQloo("qloo_rank", { options: opts, option_type: qType(kind), signals: p.sig }, state.qlooCtx())))).map((r) =>
+      entitiesOf(r).map((e) => e.entity_id),
+    );
     for (const t of shortlist) {
-      const pa = oa.indexOf(t.qlooEntityId ?? "");
-      const pb = ob.indexOf(t.qlooEntityId ?? "");
-      if (pa < 0 || pb < 0) continue;
-      results.push({ title: t, fitA: rankToTaste(pa, oa.length), fitB: rankToTaste(pb, ob.length), posA: pa, posB: pb, n: oa.length });
+      const pos = orders.map((o) => o.indexOf(t.qlooEntityId ?? ""));
+      if (pos.some((p) => p < 0)) continue;
+      results.push({ title: t, pos, fits: pos.map((p, i) => rankToTaste(p, orders[i]!.length)), n: orders[0]!.length });
     }
   }
 
-  const cmp = await callQloo("qloo_compare_audiences", { group_a: aSig, group_b: bSig, limit: 10 }, state.qlooCtx());
-  const shared = namesOf(cmp, 3);
+  // "What your tastes share" only makes sense for exactly two people.
+  const shared = ranked.length === 2 ? namesOf(await callQloo("qloo_compare_audiences", { group_a: ranked[0]!.sig, group_b: ranked[1]!.sig, limit: 10 }, state.qlooCtx()), 3) : [];
 
-  results.sort((x, y) => comparePairFit(pairFit(x.fitA, x.fitB), pairFit(y.fitA, y.fitB)));
-  const aName = aLiked[0]?.name;
-  const bName = bLiked[0]?.name ?? bNamed[0];
+  results.sort((x, y) => comparePairFit(groupFit(x.fits), groupFit(y.fits)));
   for (const r of results) {
-    const fit = pairFit(r.fitA, r.fitB);
+    const fit = groupFit(r.fits);
     state.addCandidate(r.title, {
       taste: fit.worse,
       origin: "pair_pick",
       sharedTags: shared,
       pairWorse: fit.worse,
-      perPerson: oneSided
-        ? [{ who: oneSided === "a" ? "You" : "Them", reason: `#${r.posA + 1} of ${r.n} for ${oneSided === "a" ? "your" : "their"} taste${(oneSided === "a" ? aName : bName) ? ` (${oneSided === "a" ? "you" : "they"} liked ${oneSided === "a" ? aName : bName})` : ""}` }]
-        : [
-            { who: "You", reason: `#${r.posA + 1} of ${r.n} for your taste${aName ? ` (you liked ${aName})` : ""}` },
-            { who: "Them", reason: `#${r.posB + 1} of ${r.n} for their taste${bName ? ` (they liked ${bName})` : ""}` },
-          ],
+      perPerson: ranked.map((p, i) => {
+        const yours = p.who === "You";
+        const example = p.liked[0]?.name;
+        return { who: p.who, reason: `#${r.pos[i]! + 1} of ${r.n} for ${yours ? "your" : "their"} taste${example ? ` (${yours ? "you" : "they"} liked ${example})` : ""}` };
+      }),
     });
   }
+  const notes: string[] = [];
+  if (oneSided) notes.push(`Only ${ranked[0]!.who === "You" ? "your" : `${ranked[0]!.who}'s`} likes are known, so these are ranked for that taste alone.`);
+  else if (unrated.length) notes.push(`${unrated.join(" and ")} haven't rated anything yet, so the picks are ranked for the others; nothing anyone has seen is included.`);
   return {
     status: results.length ? "ok" : "empty",
-    ...(oneSided && { note: `Only ${oneSided === "a" ? "your" : "their"} likes are known, so these are ranked for ${oneSided === "a" ? "your" : "their"} taste alone. Say so in one short clause.` }),
+    group_size: people.length,
+    ranked_for: ranked.map((p) => p.who),
+    ...(notes.length && { note: `${notes.join(" ")} Say so in one short clause.` }),
     shared_taste: shared,
     candidates: results.slice(0, 12).map((r) => ({
       id: r.title.id,
       name: r.title.name,
       year: r.title.year,
-      fit_you: Math.round(r.fitA * 100) / 100,
-      fit_them: Math.round(r.fitB * 100) / 100,
-      worse_fit: Math.round(Math.min(r.fitA, r.fitB) * 100) / 100,
+      fits: Object.fromEntries(ranked.map((p, i) => [p.who, Math.round(r.fits[i]! * 100) / 100])),
+      worst_fit: Math.round(groupFit(r.fits).worse * 100) / 100,
     })),
   };
 }

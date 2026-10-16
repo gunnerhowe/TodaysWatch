@@ -7,6 +7,7 @@ import { sha256, sixDigitCode } from "../lib/hash.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity } from "../qloo/match.ts";
 import { descriptiveTags } from "../qloo/types.ts";
+import { ratingChanged } from "../pipeline/score.ts";
 import { chipDto } from "../titles.ts";
 
 export async function profileRoutes(app: FastifyInstance) {
@@ -33,6 +34,7 @@ export async function profileRoutes(app: FastifyInstance) {
     // fully cleared ratings are removed, so "undo" leaves no trace
     if (!r.value && !r.seen && !r.wantToWatch) await prisma.rating.delete({ where: { profileId_titleId: { profileId: profile.id, titleId: title.id } } });
     if (r.value === "UP") void ensureQlooEntity(await prisma.title.findUniqueOrThrow({ where: { id: title.id } })).catch(() => {});
+    if (value !== undefined) ratingChanged(title.id); // our users' thumbs count in the score
     return { rating: { titleId: r.titleId, value: r.value, seen: r.seen, wantToWatch: r.wantToWatch } };
   });
 
@@ -70,7 +72,7 @@ export async function profileRoutes(app: FastifyInstance) {
     const [ratings, sessions, pairs] = await Promise.all([
       prisma.rating.findMany({ where: { profileId: profile.id }, include: { title: { select: { name: true, year: true, type: true, tmdbId: true } } } }),
       prisma.chatSession.findMany({ where: { profileId: profile.id }, include: { messages: true } }),
-      prisma.pair.findMany({ where: { OR: [{ aId: profile.id }, { bId: profile.id }] }, select: { id: true, createdAt: true, expiresAt: true } }),
+      prisma.pair.findMany({ where: { members: { some: { profileId: profile.id } } }, select: { id: true, size: true, createdAt: true, expiresAt: true } }),
     ]);
     return { exportedAt: new Date().toISOString(), profile: { id: profile.id, createdAt: profile.createdAt, settings: profile.settings }, ratings, chats: sessions, pairs };
   });

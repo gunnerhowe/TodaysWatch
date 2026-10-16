@@ -18,7 +18,7 @@ Critics and star ratings tell you what reviewers think. Tonight's Pick reads wha
 |---|---|
 | **Look it up:** search a title, see the Real People Score (a green dot with the share who liked it and a red dot with the share who didn't, the Liked / Mixed / Disliked bar, sample size and sources, genre line, what people say with linked quotes), rate it | `/` → `/t/movie/…` |
 | **Ask for a pick:** "something funny, under 2 hours, on Netflix" → 3 unseen picks that meet every constraint, with reasons, where to watch (or "rent only"), plus 2 backups; open **How we picked this** to see every Qloo call | `/pick` |
-| **Pick for two:** send a link, they rate 5 titles as a guest, get 3 picks the less-excited person still likes | `/pair` |
+| **Pick together (2–5 people):** send one link; everyone joins with the ratings they already have (or rates 5 as a guest), and gets 3 picks the least-excited person still likes, skipping anything anyone has seen or disliked | `/pair` |
 | **Ask by voice:** a real MCP server for Alexa+, plus a simulated Alexa+ page in the browser | `/mcp`, `/alexa` |
 | **Profile:** guest-first (no login), liked / seen / want-to-watch lists, "your taste" tags, export and delete | `/me` |
 
@@ -51,10 +51,10 @@ Full details: **[docs/methodology.md](docs/methodology.md)** (sources, cleaning,
 |---|---|
 | `qloo_find_tags` | Turn vibe words ("slow dread", "cozy") into tag IDs |
 | `qloo_recommend` | Taste-matched candidates seeded by your likes, a title you named, and tags |
-| `qloo_rank` | Order a shortlist by fit to you; for two people, once per person |
+| `qloo_rank` | Order a shortlist by fit to you; for a group, once per person |
 | `qloo_entity_tags` | "Why it fits you": tags a pick shares with your likes; "your taste" on the profile |
 | `qloo_trends` | "Rising this week" on the home page |
-| `qloo_compare_audiences` | Two-Person Pick: what the two tastes share |
+| `qloo_compare_audiences` | Pick together, for two people: what the two tastes share |
 | `qloo api search` | Map TMDB titles to Qloo entities (year must match within one; ambiguous matches ask) |
 
 Exact schemas, dumped from the harness: [docs/qloo-tools.json](docs/qloo-tools.json).
@@ -81,7 +81,7 @@ apps/api/          Node 22, Fastify, Prisma, pg-boss, OpenAI SDK (pointed at Neb
                    @qloo/qloo-harness, transformers.js (opt-in RoBERTa) → Docker on Railway
   src/llm/         one provider interface: nebius (default) | anthropic (optional)
   src/qloo/        the Qloo bridge and TMDB ↔ Qloo title matching
-  src/agent/       tools, loop, final_answer validation, Two-Person Pick
+  src/agent/       tools, loop, final_answer validation, Group Pick
   src/pipeline/    collect → clean → classify → score, genre baselines, summaries
   src/mcp/         the voice MCP server: 5 tools, Streamable HTTP, bearer auth
   scripts/         smoke tests, pre-scoring, evaluation
@@ -149,7 +149,7 @@ pnpm eval agent|classifier|stability|tmdb|labelset|walkthrough
 ## For judges
 
 - Everything works as a guest, with no login. Start at `/`, or try `/pick` and the starter chips.
-- **Two-Person Pick:** open the invite link in a second browser or a private window.
+- **Pick together:** choose 2–5 people at `/pair`, then open the invite link in other browsers or private windows (each is a separate person).
 - **Voice:** `/alexa` in Chrome (push to talk, or type). The side panel shows each MCP tool call as it happens. Phrase matching picks the tool in the simulation; a real Alexa+ device decides for itself.
 - **Provenance:** every answer has a **How we picked this** drawer: the agent's steps, each Qloo call with its status, tokens and cost.
 

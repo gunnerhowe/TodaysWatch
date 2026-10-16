@@ -24,7 +24,7 @@ export default function Home() {
             Tonight&apos;s Pick
           </Link>
           <Link href="/pair" className="inline-flex h-12 items-center rounded-full border border-line px-5 text-sm hover:bg-[var(--bg-3)]">
-            Pick for two
+            Pick together
           </Link>
         </div>
         <ul className="mt-4 flex flex-wrap justify-center gap-2" aria-label="Try asking">

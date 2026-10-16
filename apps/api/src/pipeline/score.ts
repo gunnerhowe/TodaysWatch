@@ -1,5 +1,5 @@
 import type { Mention, Title } from "@prisma/client";
-import { computeScore, genrePercentiles, isCounted, nextRefreshAt, scoreFromCounts } from "@tp/scoring";
+import { capCommunity, computeScore, genrePercentiles, isCounted, nextRefreshAt, scoreFromCounts } from "@tp/scoring";
 import { env, sourcesEnabled } from "../config.ts";
 import { prisma } from "../db.ts";
 import { CapExceededError, ensureBudget, nextYoutubeReset } from "../lib/ledger.ts";
@@ -14,7 +14,7 @@ import { loadBaselines, scheduleBaselineRefresh } from "./baselines.ts";
 import { classifyAll, ModelUnavailableError, type ToClassify } from "./classify.ts";
 import { pauseScoring, scoringPause } from "./pause.ts";
 import { blueskyRelevant, cleanItems, interleaveBySource, mentionsTheVideo } from "./clean.ts";
-import { ProgressLine } from "./progress.ts";
+import { isActive, ProgressLine } from "./progress.ts";
 import { ROBERTA_TAG } from "./roberta.ts";
 import { summarize } from "./summary.ts";
 import { BASIC_SUFFIX, currentLlmTag, expectedVersion, llmLabelling } from "./version.ts";
@@ -228,12 +228,44 @@ export async function scoreTitle(titleId: string, opts: { live: boolean }): Prom
   }
 }
 
+/** Our own users' thumbs, shown as their own source next to YouTube, Bluesky and the rest. */
+export const COMMUNITY_SOURCE = "TONIGHTS_PICK";
+
+/**
+ * Thumbs from our users count as opinions: one per profile, only from profiles with at least
+ * COMMUNITY_MIN_RATINGS ratings, and capped at COMMUNITY_MAX_SHARE of the counted total.
+ */
+async function communityCounts(titleId: string, outsideCounted: number): Promise<{ liked: number; disliked: number }> {
+  const rows = await prisma.rating.findMany({ where: { titleId, value: { not: null } }, select: { profileId: true, value: true } });
+  if (!rows.length) return { liked: 0, disliked: 0 };
+  const active = await prisma.rating.groupBy({
+    by: ["profileId"],
+    where: { profileId: { in: rows.map((r) => r.profileId) }, value: { not: null } },
+    _count: { _all: true },
+  });
+  const ok = new Set(active.filter((a) => a._count._all >= env.COMMUNITY_MIN_RATINGS).map((a) => a.profileId));
+  const up = rows.filter((r) => ok.has(r.profileId) && r.value === "UP").length;
+  const down = rows.filter((r) => ok.has(r.profileId) && r.value === "DOWN").length;
+  return capCommunity(up, down, outsideCounted, env.COMMUNITY_MAX_SHARE);
+}
+
+/** Someone rated a title: recount its score now (no model calls) if it has one. */
+export function ratingChanged(titleId: string): void {
+  void (async () => {
+    const t = await prisma.title.findUnique({ where: { id: titleId }, select: { scoreState: true } });
+    if (!t || t.scoreState === "NONE" || t.scoreState === "PENDING" || isActive(titleId)) return;
+    await recomputeScore(titleId, { skipSummary: true, keepSchedule: true });
+  })().catch((e) => console.warn("[score] recount after rating failed:", e instanceof Error ? e.message : e));
+}
+
 /** Recount every current-label mention, write the title's score copy, snapshot, quotes and summary. */
-export async function recomputeScore(titleId: string, opts: { skipSummary?: boolean } = {}) {
+export async function recomputeScore(titleId: string, opts: { skipSummary?: boolean; keepSchedule?: boolean } = {}) {
   const t = await prisma.title.findUniqueOrThrow({ where: { id: titleId } });
   const mentions = (await prisma.mention.findMany({ where: { titleId } })).filter((m) => isCurrentLabel(m.classifier));
   const counted = mentions.filter((m) => isCounted(m));
-  const s = computeScore(mentions);
+  const outside = computeScore(mentions);
+  const community = await communityCounts(titleId, outside.counted);
+  const s = scoreFromCounts(outside.liked + community.liked, outside.mixed, outside.disliked + community.disliked);
   // Flag "basic classifier" only when the backup model labelled a meaningful share of what counts;
   // a stray handful is relabelled by Nemotron on the next refresh anyway.
   const basicShare = counted.length ? counted.filter((m) => m.classifier === ROBERTA_TAG).length / counted.length : 0;
@@ -241,6 +273,7 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
 
   const sourceCounts: Record<string, number> = {};
   for (const m of counted) sourceCounts[m.source] = (sourceCounts[m.source] ?? 0) + 1;
+  if (community.liked + community.disliked) sourceCounts[COMMUNITY_SOURCE] = community.liked + community.disliked;
 
   const baselines = await loadBaselines();
   const gp = s.state === "FULL" && s.likedPct !== null ? genrePercentiles(s.likedPct, t.genres, baselines) : null;
@@ -269,7 +302,8 @@ export async function recomputeScore(titleId: string, opts: { skipSummary?: bool
         scoreVersion: version,
         basicClassifier: basic,
         scoredAt: new Date(),
-        nextRefreshAt: nextRefreshAt(t.releaseDate),
+        // a recount after someone rates must not push back a scheduled re-read
+        ...(opts.keepSchedule ? {} : { nextRefreshAt: nextRefreshAt(t.releaseDate) }),
       },
     }),
     prisma.scoreSnapshot.create({

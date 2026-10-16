@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  capCommunity,
+  groupFit,
   comparePairFit,
   computeScore,
   genrePercentiles,
@@ -149,5 +151,21 @@ describe("misc", () => {
   it("spearman", () => {
     expect(spearman([1, 2, 3, 4], [10, 20, 30, 40])).toBeCloseTo(1);
     expect(spearman([1, 2, 3, 4], [4, 3, 2, 1])).toBeCloseTo(-1);
+  });
+});
+
+describe("community ratings and group fit", () => {
+  it("counts our users' thumbs up to the cap, keeping their ratio", () => {
+    expect(capCommunity(3, 1, 300, 0.25)).toEqual({ liked: 3, disliked: 1 }); // 4 <= 100
+    expect(capCommunity(150, 50, 300, 0.25)).toEqual({ liked: 75, disliked: 25 }); // 200 > 100: scaled to 100
+    expect(capCommunity(5, 5, 0, 0.25)).toEqual({ liked: 0, disliked: 0 }); // no outside opinions: no say yet
+    expect(capCommunity(0, 0, 300, 0.25)).toEqual({ liked: 0, disliked: 0 });
+  });
+  it("group fit is decided by the least-excited person", () => {
+    const loved = groupFit([1, 1, 0.1]); // two love it, one doesn't
+    const fine = groupFit([0.6, 0.6, 0.6]); // everyone's fine with it
+    expect(loved.worse).toBeCloseTo(0.1);
+    expect(comparePairFit(fine, loved)).toBeLessThan(0); // "fine for everyone" ranks first
+    expect(groupFit([0.5, 0.9]).better).toBeCloseTo(0.7);
   });
 });

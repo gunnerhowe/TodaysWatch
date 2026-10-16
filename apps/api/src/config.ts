@@ -33,6 +33,10 @@ const EnvZ = z.object({
 
   CLASSIFIER: z.enum(["llm", "roberta"]).default("llm"),
   CLASSIFY_MAX_PER_TITLE: num(600),
+  // Our own users' thumbs count in the Real People Score: only profiles with this many ratings,
+  // and at most this share of a title's counted opinions (so fake guest profiles can't swing it).
+  COMMUNITY_MIN_RATINGS: num(3),
+  COMMUNITY_MAX_SHARE: num(0.25),
   LLM_MAX_CONCURRENCY: num(6), // model calls in flight across the whole server
   CLASSIFIER_REVIEW_MODEL: opt, // defaults to LLM_AGENT_MODEL; "none" disables the second opinion
   // RoBERTa needs ~750 MB; on a 1 GB host it gets the API killed, so it only runs when asked for

@@ -145,6 +145,7 @@ model Profile {
   ratings   Rating[]
   pairsAsA  Pair[]        @relation("PairA")
   pairsAsB  Pair[]        @relation("PairB")
+  groups    PairMember[]
   sessions  ChatSession[]
   mcpLinks  McpLink[]
   createdAt DateTime      @default(now())
@@ -163,15 +164,30 @@ model Rating {
   @@id([profileId, titleId])
 }
 
+/// A pick-together invite: the owner (a) plus up to size-1 others, all in PairMember.
 model Pair {
-  id         String   @id @default(cuid())
-  inviteCode String   @unique
-  aId        String
-  bId        String?
-  a          Profile  @relation("PairA", fields: [aId], references: [id], onDelete: Cascade)
-  b          Profile? @relation("PairB", fields: [bId], references: [id], onDelete: Cascade)
+  id         String       @id @default(cuid())
+  inviteCode String       @unique
+  aId        String // owner
+  bId        String? // legacy two-person column; members now live in PairMember
+  size       Int          @default(2) // 2-5 people, owner included
+  a          Profile      @relation("PairA", fields: [aId], references: [id], onDelete: Cascade)
+  b          Profile?     @relation("PairB", fields: [bId], references: [id], onDelete: Cascade)
+  members    PairMember[]
   expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  createdAt  DateTime     @default(now())
+}
+
+model PairMember {
+  pairId    String
+  profileId String
+  name      String? // optional first name shown to the group, e.g. "Sam"
+  pair      Pair     @relation(fields: [pairId], references: [id], onDelete: Cascade)
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@id([pairId, profileId])
+  @@index([profileId])
 }
 
 model ChatSession {

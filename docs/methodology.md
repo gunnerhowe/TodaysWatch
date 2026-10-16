@@ -48,6 +48,8 @@ An opinion **counts** if `about_title` and `firsthand` are true, `stance` isn't 
 - **Headline = Liked %.**
 - **Sample states:** 150+ counted → full score; 50–149 → "Early read"; under 50 → "Not enough talk yet", no percentage.
 - **Margin:** half-width of the 95% Wilson interval, shown as "± n points".
+- **Our own users count too.** A thumbs up or down on Tonight's Pick is an opinion (up = liked, down = disliked), shown as its own source, "Tonight's Pick users". To keep fake guest profiles from swinging a score: one vote per profile per title, only from profiles with at least 3 ratings (`COMMUNITY_MIN_RATINGS`), and at most 25% of a title's counted opinions (`COMMUNITY_MAX_SHARE`; over the cap, ups and downs shrink in proportion). With no outside opinions the cap is zero, so our users alone can't create a score yet. A new rating recounts the title at once, with no model calls.
+- **Missing sources:** when a source is skipped for quota (YouTube's resets at midnight Pacific), the title shows "More opinions coming" instead of "Not enough talk yet" and is re-read just after the reset.
 
 ## 5. Ranking: Wilson lower bound
 
@@ -90,7 +92,7 @@ The agent ([`loop.ts`](../apps/api/src/agent/loop.ts)) is Nemotron 3 Super with 
 
 **`final_answer` is checked in code** ([`validate.ts`](../apps/api/src/agent/validate.ts)): every pick and backup ID must have appeared in a tool result during this turn; no seen, rated or disliked titles unless the user opted in; picks need 50+ counted opinions (unscored titles may only be backups). A rejected answer gets the reason and one retry. If the model still fails, is over its cap, or is unavailable, the server runs the same default plan itself with the same tools, and the answer says so. Either way, an invented or already-seen pick can't reach the user.
 
-**Two-Person Pick:** candidates come from both people's likes; each candidate is ranked separately for each person with `qloo_rank`; we keep the titles with the best **worse** fit (maximize the minimum), so the pick is the one the less-excited person still likes. Titles either person has seen are removed.
+**Group Pick (2–5 people):** everyone joins one link with the profile already on their device (likes, dislikes and seen titles), or rates 5 titles as a guest. Candidates come from everyone together plus each person's own taste (so one strong taste can't take over); each candidate is ranked separately for each person with `qloo_rank` (orders, not scores, since scores from separate calls aren't comparable); we keep the titles with the best **worst** fit (maximize the minimum), breaking ties by the group's average fit. The pick is the one the least-excited person still likes. Titles anyone has seen or disliked are removed. People with no likes yet are left out of the ranking and the answer says so.
 
 ## 9. Limits
 

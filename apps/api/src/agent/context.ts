@@ -9,7 +9,8 @@ export interface UserContext {
   seen: Title[];
   wantToWatch: Title[];
   includeSeen: boolean;
-  partnerProfileId: string | null;
+  /** the other people in this pick-together group (2-5 people), with the label the group sees */
+  groupMembers: { profileId: string; label: string }[];
 }
 
 export async function loadUserContext(profileId: string, pairId?: string | null): Promise<UserContext> {
@@ -18,18 +19,30 @@ export async function loadUserContext(profileId: string, pairId?: string | null)
     prisma.rating.findMany({ where: { profileId }, include: { title: true }, orderBy: { updatedAt: "desc" } }),
   ]);
   const settings = SettingsZ.parse(profile.settings ?? {});
-  let partnerProfileId: string | null = null;
+  // The named group, or else the most recent active group this person is in with others.
   const pair = pairId
-    ? await prisma.pair.findUnique({ where: { id: pairId } })
-    : await prisma.pair.findFirst({ where: { OR: [{ aId: profileId }, { bId: profileId }], bId: { not: null }, expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } });
-  if (pair && (pair.aId === profileId || pair.bId === profileId)) partnerProfileId = pair.aId === profileId ? pair.bId : pair.aId;
+    ? await prisma.pair.findUnique({ where: { id: pairId }, include: { members: { orderBy: { joinedAt: "asc" } } } })
+    : (
+        await prisma.pair.findMany({
+          where: { members: { some: { profileId } }, expiresAt: { gt: new Date() } },
+          include: { members: { orderBy: { joinedAt: "asc" } } },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        })
+      ).find((p) => p.members.length >= 2);
+  const groupMembers =
+    pair && pair.members.some((m) => m.profileId === profileId)
+      ? pair.members
+          .map((m, i) => ({ profileId: m.profileId, label: m.name ?? (m.profileId === pair.aId ? "Host" : `Person ${i + 1}`) }))
+          .filter((m) => m.profileId !== profileId)
+      : [];
   return {
     liked: ratings.filter((r) => r.value === "UP").map((r) => r.title),
     disliked: ratings.filter((r) => r.value === "DOWN").map((r) => r.title),
     seen: ratings.filter((r) => r.seen || r.value !== null).map((r) => r.title),
     wantToWatch: ratings.filter((r) => r.wantToWatch).map((r) => r.title),
     includeSeen: settings.includeSeen,
-    partnerProfileId,
+    groupMembers,
   };
 }
 

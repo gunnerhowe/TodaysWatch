@@ -202,15 +202,38 @@ export const ProvenanceZ = z.object({
 });
 export type Provenance = z.infer<typeof ProvenanceZ>;
 
+export const GROUP_MIN = 2;
+export const GROUP_MAX = 5;
+
+export const PairMemberZ = z.object({
+  /** first name if given, otherwise "Person 2" etc. */
+  label: z.string(),
+  isMe: z.boolean(),
+  isOwner: z.boolean(),
+  /** thumbs up/down given so far: more ratings, better picks */
+  ratedCount: z.number().int(),
+});
+export type PairMember = z.infer<typeof PairMemberZ>;
+
+/** A pick-together invite for 2-5 people (named Pair for history). */
 export const PairZ = z.object({
   id: z.string(),
   inviteCode: z.string(),
+  size: z.number().int().min(GROUP_MIN).max(GROUP_MAX),
+  members: z.array(PairMemberZ),
+  /** at least two people have joined, so picks can run */
   joined: z.boolean(),
+  full: z.boolean(),
   isOwner: z.boolean(),
   expiresAt: z.string(),
-  partnerRatedCount: z.number().int(),
 });
 export type Pair = z.infer<typeof PairZ>;
+
+export const CreatePairZ = z.object({
+  size: z.number().int().min(GROUP_MIN).max(GROUP_MAX).default(2),
+  name: z.string().trim().max(24).optional(),
+});
+export const JoinPairZ = z.object({ name: z.string().trim().max(24).optional() });
 
 export const BaselineZ = z.object({ genre: z.string(), n: z.number().int(), medianLiked: z.number() });
 export type Baseline = z.infer<typeof BaselineZ>;

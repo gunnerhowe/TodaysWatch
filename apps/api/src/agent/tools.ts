@@ -10,7 +10,8 @@ import { descriptiveTags, entitiesOf, issuesOf, tagsOf, type InsightsType, type 
 import { discoverForRequest, getDetails, getProviders, normTitle, searchTitles, WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
 import { baselineSizes, genreLine, isStale, typeToKind, upsertTitle } from "../titles.ts";
 import { loadUserContext, type UserContext } from "./context.ts";
-import { pairCandidates } from "./pair.ts";
+import { GROUP_MAX } from "@tp/shared";
+import { groupCandidates, type GroupPerson } from "./pair.ts";
 import type { Constraints, TurnState } from "./state.ts";
 import { trendingTitles } from "./trending.ts";
 
@@ -88,7 +89,7 @@ export const handlers: Record<string, Handler> = {
       seen_count: ctx.seen.length,
       seen: ctx.seen.slice(0, 40).map((t) => t.id),
       include_seen: state.includeSeen,
-      has_partner: !!ctx.partnerProfileId || !!state.pairId,
+      group_size: ctx.groupMembers.length + 1, // 1 = just this user; 2-5 = a pick-together group
       note: ctx.liked.length === 0 ? "The user has not rated anything yet. Use the request's own vibe tags and popular, well-scored titles." : undefined,
     };
   },
@@ -340,27 +341,31 @@ export const handlers: Record<string, Handler> = {
   },
 
   async pair_pick(a, { state, ctx }) {
-    let partnerLiked: Title[] = [];
-    let partnerSeen: Title[] = [];
-    const partnerId = ctx.partnerProfileId;
-    if (partnerId) {
-      const pctx = await loadUserContext(partnerId);
-      partnerLiked = pctx.liked;
-      partnerSeen = pctx.seen;
+    // Everyone in the group brings their own profile: likes seed and rank the picks, and
+    // anything anyone has seen or disliked is left out.
+    const people: GroupPerson[] = [{ who: "You", liked: ctx.liked, seen: ctx.seen, disliked: ctx.disliked }];
+    for (const m of ctx.groupMembers.slice(0, GROUP_MAX - 1)) {
+      const mctx = await loadUserContext(m.profileId, state.pairId);
+      people.push({ who: m.label, liked: mctx.liked, seen: mctx.seen, disliked: mctx.disliked });
     }
-    // Titles the other person named ("my partner loves Ted Lasso"). Qloo signals must be entity
+    // Titles someone named out loud ("my partner loves Ted Lasso"). Qloo signals must be entity
     // IDs, so resolve each name through TMDB the same way recommend_titles does.
+    const named: Title[] = [];
     for (const raw of arr(a.their_likes).slice(0, 5)) {
       const name = raw.slice(0, 80);
       const hit = (await searchTitles(name).catch(() => [])).find((h) => normTitle(h.name) === normTitle(name));
       const t = hit ? await upsertTitle(hit.type, hit.tmdbId).catch(() => null) : null;
-      if (t && !partnerLiked.some((x) => x.id === t.id)) {
+      if (t && !named.some((x) => x.id === t.id)) {
         state.remember(t);
-        partnerLiked.push(t);
+        named.push(t);
       }
     }
-    const r = await pairCandidates(state, ctx.liked, partnerLiked, partnerSeen, [], (a.type as "movie" | "tv" | "any") ?? "any");
-    return r;
+    if (named.length) {
+      // With no group, named likes are the other person; with a group, they add to the first other member.
+      if (people.length === 1) people.push({ who: "Them", liked: named, seen: [], disliked: [] });
+      else people[1]!.liked = [...named, ...people[1]!.liked];
+    }
+    return groupCandidates(state, people, (a.type as "movie" | "tv" | "any") ?? "any");
   },
 };
 
@@ -470,10 +475,10 @@ export const TOOL_DEFS: ToolDef[] = [
   { name: "trending", description: "What's rising this week on Qloo, with ids.", parameters: { type: "object", properties: { type: { type: "string", enum: ["movie", "tv"] } }, additionalProperties: false } },
   {
     name: "pair_pick",
-    description: "For two people: candidates both should like, scored by the WORSE of the two fits, with one reason per person. Uses the linked partner's likes, or titles the second person named.",
+    description: "For a group of 2-5 people: candidates everyone should like, scored by the WORST fit across the group (the least-excited person), with one reason per person. Uses each group member's likes, seen and disliked titles, plus any titles someone named.",
     parameters: {
       type: "object",
-      properties: { their_likes: { type: "array", items: { type: "string" }, maxItems: 5, description: "titles the second person loved, if named" }, type: { type: "string", enum: ["movie", "tv", "any"] } },
+      properties: { their_likes: { type: "array", items: { type: "string" }, maxItems: 5, description: "titles another person in the room loved, if named out loud" }, type: { type: "string", enum: ["movie", "tv", "any"] } },
       additionalProperties: false,
     },
   },

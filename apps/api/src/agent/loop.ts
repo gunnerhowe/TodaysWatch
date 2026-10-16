@@ -304,7 +304,7 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
       const first = (r.tags as { id: string }[] | undefined)?.[0];
       if (first) exclude.push(first.id);
     }
-    const two = p.forTwo && (ctx.partnerProfileId || state.pairId);
+    const two = (p.forTwo && ctx.groupMembers.length > 0) || !!state.pairId;
     if (two) await call("pair_pick", { type: p.constraints.type ?? "any" });
     else {
       const r = await call("recommend_titles", { seeds: p.likeTitles, tags, exclude_tags: exclude, type: p.constraints.type ?? "any" });
@@ -350,7 +350,7 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
     const cand = state.candidates.get(id);
     const tags = cand?.sharedTags ?? [];
     const liked = ctx.liked.slice(0, 2).map((t) => t.name);
-    if (cand?.perPerson) return `Both of you should like it${tags.length ? `: ${tags.slice(0, 2).join(", ")}` : ""}.`;
+    if (cand?.perPerson) return `${cand.perPerson.length > 2 ? "Everyone" : "Both of you"} should like it${tags.length ? `: ${tags.slice(0, 2).join(", ")}` : ""}.`;
     if (tags.length && liked.length) return `You liked ${liked.join(" and ")}; this shares ${tags.slice(0, 2).join(" and ")}.`;
     if (tags.length) return `Fits what you asked for: ${tags.slice(0, 3).join(", ")}.`;
     return "A strong Qloo taste match that real viewers liked.";

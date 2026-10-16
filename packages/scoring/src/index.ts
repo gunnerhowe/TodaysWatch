@@ -209,9 +209,32 @@ export function pickScore(taste: number, genreAdjusted: number, w: PickWeights =
   return w.taste * taste + w.reception * genreAdjusted;
 }
 
+/**
+ * Our own users' thumbs, capped so they make up at most `maxShare` of the counted total.
+ * When over the cap, both sides shrink in proportion, so the cap never changes their ratio.
+ * With no outside opinions the cap is 0: our users alone can't create a score (yet).
+ */
+export function capCommunity(up: number, down: number, outsideCounted: number, maxShare: number): { liked: number; disliked: number } {
+  const n = up + down;
+  if (n === 0 || maxShare <= 0) return { liked: 0, disliked: 0 };
+  const max = maxShare >= 1 ? n : Math.floor((outsideCounted * maxShare) / (1 - maxShare));
+  if (n <= max) return { liked: up, disliked: down };
+  const liked = Math.round((up * max) / n);
+  return { liked, disliked: max - liked };
+}
+
 /** Two-Person Pick: maximize the worse of the two fits; ties broken by the better fit. */
 export function pairFit(fitA: number, fitB: number): { worse: number; better: number } {
   return { worse: Math.min(fitA, fitB), better: Math.max(fitA, fitB) };
+}
+
+/**
+ * Group Pick (2-5 people): the least-excited person's fit decides; ties broken by the group's
+ * average fit. Same shape as pairFit, so comparePairFit sorts both.
+ */
+export function groupFit(fits: readonly number[]): { worse: number; better: number } {
+  if (fits.length === 0) return { worse: 0, better: 0 };
+  return { worse: Math.min(...fits), better: fits.reduce((a, b) => a + b, 0) / fits.length };
 }
 
 export function comparePairFit(a: { worse: number; better: number }, b: { worse: number; better: number }): number {

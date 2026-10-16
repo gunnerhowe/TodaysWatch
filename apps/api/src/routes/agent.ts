@@ -14,8 +14,8 @@ export async function agentRoutes(app: FastifyInstance) {
     const profile = await profileFor(req.caller.profileToken);
     if (!chatLimiter.take(`ip:${req.ip}`) || !chatLimiter.take(`p:${profile.id}`)) return reply.code(429).send({ error: "That's a lot of asking. Try again in a minute." });
     if (body.data.pairId) {
-      const pair = await prisma.pair.findUnique({ where: { id: body.data.pairId } });
-      if (!pair || (pair.aId !== profile.id && pair.bId !== profile.id)) return reply.code(403).send({ error: "not your pair" });
+      const member = await prisma.pairMember.findUnique({ where: { pairId_profileId: { pairId: body.data.pairId, profileId: profile.id } } });
+      if (!member) return reply.code(403).send({ error: "not your group" });
     }
     const sse = startSse(reply);
     try {

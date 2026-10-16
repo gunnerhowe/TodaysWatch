@@ -26,7 +26,7 @@ Default plan:
 6. rank_for_user on the best-scored shortlist.
 7. Choose the top 3 by pick_score (already combines taste and genre-adjusted reception), then explain_fit on them.
 8. final_answer.
-For two people ("we", "us", "my partner") with a linked partner or named likes, use pair_pick instead of steps 3 and 6.
+For a group (2-5 people: "we", "us", "my partner", or group_size > 1 in the user context) or named likes, use pair_pick instead of steps 3 and 6. It ranks for every person and keeps the titles the least-excited person still likes; mention its note if it has one.
 ${opts.channel === "alexa" ? "\nThis is a voice session: keep each 'why' to 20 words or fewer and never include URLs." : ""}
 Today is ${opts.today}.`;
 }

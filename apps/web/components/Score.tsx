@@ -35,7 +35,7 @@ export function ScoreHeadline({ score }: { score: Score }) {
       <div>
         {score.state === "EARLY" && <p className="mb-1 inline-block rounded-full border border-line px-2 py-0.5 text-xs uppercase tracking-wider text-accent">Early read</p>}
         <p className="font-display tabular text-6xl font-bold leading-none sm:text-7xl">
-          {score.likedPct}% <span className="text-3xl font-semibold text-dim sm:text-4xl">of viewers liked it</span>
+          {score.likedPct}%<span className="mt-1 block text-2xl font-semibold text-dim sm:text-3xl">of viewers liked it</span>
         </p>
       </div>
     );

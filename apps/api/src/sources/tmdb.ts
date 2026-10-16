@@ -41,6 +41,15 @@ interface MultiResult {
   overview?: string;
 }
 
+/** Lowercase, accents and punctuation removed, "&" read as "and": for exact title comparison. */
+export function normTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD") // splits "é" into "e" + an accent mark, which the last step drops
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 const yearOf = (d?: string | null) => (d && /^\d{4}/.test(d) ? Number(d.slice(0, 4)) : null);
 
 /** F1: multi-search, people hidden, up to 8 results. Cached 1 hour. */
@@ -178,20 +187,24 @@ export async function genreList(kind: Kind): Promise<{ id: number; name: string 
 
 /** Find a TMDB id by name + year (used to map Qloo entities back to TMDB). */
 export async function findByName(name: string, kind: Kind, year?: number | null): Promise<{ tmdbId: number; year: number | null } | null> {
-  const key = `tmdb:find:${kind}:${name.toLowerCase()}:${year ?? ""}`;
+  const key = `tmdb:find:v2:${kind}:${name.toLowerCase()}:${year ?? ""}`;
   const { value } = await cached(key, 7 * 24 * HOUR, async () => {
     const d = await tmdb<{ results: MultiResult[] }>(`/search/${kind}`, {
       query: name,
       ...(year ? (kind === "movie" ? { year } : { first_air_date_year: year }) : {}),
       include_adult: "false",
     });
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const target = norm(name);
+    const target = normTitle(name);
     const scored = d.results
       .map((r) => ({ r, y: yearOf(r.release_date ?? r.first_air_date) }))
       .filter(({ y }) => !year || !y || Math.abs(y - year) <= 1);
-    const best = scored.find(({ r }) => norm(r.title ?? r.name ?? "") === target) ?? scored[0];
-    return best ? { tmdbId: best.r.id, year: best.y } : null;
+    // Exact (normalized) name only. Taking TMDB's first result when nothing matched turned a
+    // Qloo horror recommendation into an unrelated sitcom; never force a fuzzy match.
+    const r0 = scored.find(({ r }) => {
+      const o = r as MultiResult & { original_title?: string; original_name?: string };
+      return [o.title, o.name, o.original_title, o.original_name].some((n) => n && normTitle(n) === target);
+    });
+    return r0 ? { tmdbId: r0.r.id, year: r0.y } : null;
   });
   return value;
 }

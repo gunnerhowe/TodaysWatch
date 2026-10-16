@@ -44,19 +44,38 @@ export function validateFinal(raw: unknown, v: ValidationView): Verdict {
   const seen = ids.filter((id) => v.excluded(id));
   if (seen.length) return { ok: false, reason: `These titles are already seen, rated or disliked by the user: ${seen.join(", ")}. Replace them.` };
 
-  // Scored titles come first. An unscored ("score pending") pick is allowed only to fill the
-  // slots that the scored, unseen candidates from this turn can't.
-  const eligible = [...v.allowed].filter((id) => !v.excluded(id) && (v.countedN(id) ?? 0) >= EARLY_MIN);
-  const thin = a.picks.filter((p) => (v.countedN(p.id) ?? 0) < EARLY_MIN).map((p) => p.id);
-  const scoredPicked = a.picks.length - thin.length;
-  const scoredLeftOut = eligible.filter((id) => !a.picks.some((p) => p.id === id)).length;
-  if (thin.length && scoredLeftOut > 0 && scoredPicked < 3) {
-    return { ok: false, reason: `Use scored titles before unscored ones: ${thin.join(", ")} have under ${EARLY_MIN} counted opinions while ${scoredLeftOut} scored candidate(s) were left out. Call get_scores and pick scored titles first.` };
-  }
-
+  // "Scored titles first" is enforced by promoteScored() after acceptance, not by rejecting:
+  // rejections cost two extra model rounds and still ended in the fallback plan.
   if (!hasQuestion && a.picks.length < 3 && v.allowed.size >= 3) {
     const available = [...v.allowed].filter((id) => !v.excluded(id)).length;
     if (available >= 3) return { ok: false, reason: "Give 3 picks. Use scored titles first, then the best taste matches (shown as score pending)." };
   }
   return { ok: true, value: a };
+}
+
+/**
+ * Scored titles come first, in code: any unscored ("score pending") pick is replaced by a
+ * scored, unseen candidate from this turn that the model left out, best pick score first.
+ * The replaced title becomes a backup. Returns the ids that were swapped in.
+ */
+export function promoteScored(
+  a: FinalArgs,
+  v: ValidationView & { rank: (id: string) => number; why: (id: string) => string },
+): string[] {
+  const inPicks = new Set(a.picks.map((p) => p.id));
+  const spare = [...v.allowed]
+    .filter((id) => !inPicks.has(id) && !v.excluded(id) && (v.countedN(id) ?? 0) >= EARLY_MIN)
+    .sort((x, y) => v.rank(y) - v.rank(x));
+  const swapped: string[] = [];
+  const demoted: { id: string; why: string }[] = [];
+  a.picks = a.picks.map((p) => {
+    if ((v.countedN(p.id) ?? 0) >= EARLY_MIN || spare.length === 0) return p;
+    const id = spare.shift()!;
+    swapped.push(id);
+    demoted.push(p);
+    // keep the model's own reason if it had already listed this title as a backup
+    return { id, why: a.backups.find((b) => b.id === id)?.why || v.why(id) };
+  });
+  a.backups = [...demoted, ...a.backups.filter((b) => !swapped.includes(b.id))].slice(0, 2);
+  return swapped;
 }

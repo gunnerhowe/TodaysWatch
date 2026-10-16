@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateFinal, type ValidationView } from "./validate.ts";
+import { promoteScored, validateFinal, type ValidationView } from "./validate.ts";
 
 const view = (over: Partial<ValidationView> = {}): ValidationView => ({
   allowed: new Set(["a", "b", "c", "d", "e"]),
@@ -33,17 +33,28 @@ describe("validateFinal", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("scored titles come before unscored ones", () => {
-    // c and d are scored and were left out, so the unscored e can't be a pick
-    expect(validateFinal({ picks: [pick("a"), pick("b"), pick("e")] }, view()).ok).toBe(false);
-    expect(validateFinal({ picks: [pick("a"), pick("b"), pick("c")], backups: [pick("e")] }, view()).ok).toBe(true);
+  it("scored titles replace unscored picks, and the unscored one becomes a backup", () => {
+    const a = { intro: "", picks: [pick("a"), pick("b"), pick("e")], backups: [] as { id: string; why: string }[], question: null };
+    const swapped = promoteScored(a, { ...view(), rank: (id) => (id === "d" ? 2 : 1), why: () => "scored" });
+    expect(swapped).toEqual(["d"]); // best-ranked spare scored title
+    expect(a.picks.map((p) => p.id)).toEqual(["a", "b", "d"]);
+    expect(a.backups.map((p) => p.id)).toEqual(["e"]);
   });
 
-  it("fills with score-pending picks only when too few scored titles exist", () => {
-    const thinCatalog = view({ allowed: new Set(["a", "x", "y", "z"]), countedN: (id) => (id === "a" ? 200 : 0) });
-    expect(validateFinal({ picks: [pick("a"), pick("x"), pick("y")] }, thinCatalog).ok).toBe(true);
-    // but the one scored title must be used
-    expect(validateFinal({ picks: [pick("x"), pick("y"), pick("z")] }, thinCatalog).ok).toBe(false);
+  it("keeps score-pending picks when there are no scored titles to use", () => {
+    const thinCatalog = { ...view({ allowed: new Set(["a", "x", "y", "z"]), countedN: (id) => (id === "a" ? 200 : 0) }), rank: () => 1, why: () => "" };
+    const a = { intro: "", picks: [pick("x"), pick("y"), pick("z")], backups: [] as { id: string; why: string }[], question: null };
+    expect(validateFinal(a, thinCatalog).ok).toBe(true);
+    promoteScored(a, thinCatalog);
+    // the one scored title is used; the rest stay score-pending
+    expect(a.picks.map((p) => p.id)).toEqual(["a", "y", "z"]);
+  });
+
+  it("promotes a scored title the model listed as a backup, keeping its reason", () => {
+    const a = { intro: "", picks: [pick("a"), pick("b"), pick("e")], backups: [{ id: "c", why: "model's reason" }], question: null };
+    promoteScored(a, { ...view(), rank: (id) => (id === "c" ? 5 : 1), why: () => "generic" });
+    expect(a.picks[2]).toEqual({ id: "c", why: "model's reason" });
+    expect(a.backups.map((p) => p.id)).toEqual(["e"]);
   });
 
   it("rejects duplicates", () => {

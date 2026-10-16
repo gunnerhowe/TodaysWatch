@@ -102,6 +102,12 @@ export async function bootQloo(): Promise<typeof ready> {
       lastSearchError = null;
       const hits = await qlooSearch("Hereditary", "movie");
       ready.probe = { ...(ready.probe as object), search: { hits: hits.length, first: hits[0] ?? null, error: lastSearchError } };
+      if (hits[0]) {
+        // what kinds of tags entity_tags returns (genre, theme, brand, audience...), for filtering
+        const et = parseEnvelope(await c.callTool({ name: "qloo_entity_tags", arguments: { entities: [hits[0].entityId], entity_type: "movie", limit: 20 } }, undefined, { timeout: 30_000 }));
+        const tags = Array.isArray(et.results) ? (et.results as { name?: string; type?: string; id?: string }[]) : [];
+        ready.probe = { ...(ready.probe as object), entityTags: { status: et.status, tags: tags.map((t) => `${t.name} | ${t.type ?? t.id}`) } };
+      }
       if (probe.status === "error") {
         ready.ok = false;
         ready.detail = `Qloo call failed: ${probe.error?.code ?? "error"} ${probe.summary ?? ""}`.trim();

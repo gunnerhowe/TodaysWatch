@@ -11,7 +11,7 @@ import { isVague, parseRequest } from "./parse.ts";
 import { systemPrompt } from "./prompt.ts";
 import { TurnState } from "./state.ts";
 import { handlers, TOOL_DEFS, TOOL_LABELS } from "./tools.ts";
-import { validateFinal, type FinalArgs } from "./validate.ts";
+import { promoteScored, validateFinal, type FinalArgs } from "./validate.ts";
 
 const MAX_TOOL_CALLS = 8;
 const MAX_TOOL_RESULT_CHARS = 8000;
@@ -227,7 +227,23 @@ async function llmLoop(input: RunInput, state: TurnState, ctx: UserContext, sess
           countedN: (id) => state.titles.get(id)?.countedN,
         });
         state.toolCalls.push({ tool: "final_answer", args: raw, summary: v.ok ? "accepted" : `rejected: ${v.reason}`, ms: 0 });
-        if (v.ok) return { usage, rejected, final: v.value };
+        if (v.ok) {
+          const w = { taste: env.PICK_WEIGHT_TASTE, reception: env.PICK_WEIGHT_RECEPTION };
+          promoteScored(v.value, {
+            allowed: state.allowed,
+            excluded: (id) => state.excluded(id),
+            countedN: (id) => state.titles.get(id)?.countedN,
+            rank: (id) => {
+              const t = state.titles.get(id);
+              return pickScore(state.candidates.get(id)?.taste ?? 0.5, t?.genreAdjusted ?? t?.wilsonLow ?? 0, w);
+            },
+            why: (id) => {
+              const tags = state.candidates.get(id)?.sharedTags ?? [];
+              return tags.length ? `A close taste match: ${tags.slice(0, 3).join(", ")}.` : "A close taste match that real viewers rated well.";
+            },
+          });
+          return { usage, rejected, final: v.value };
+        }
         rejected++;
         if (rejected > 1) return { usage, rejected, final: null };
         messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ rejected: true, reason: v.reason }) });

@@ -1,6 +1,6 @@
 import type { Title } from "@prisma/client";
 import { prisma } from "../db.ts";
-import { findByName } from "../sources/tmdb.ts";
+import { findByName, normTitle } from "../sources/tmdb.ts";
 import { upsertTitle } from "../titles.ts";
 import { qlooSearch, type CallContext, type QlooSearchHit } from "./bridge.ts";
 import type { QlooEntity } from "./types.ts";
@@ -46,7 +46,9 @@ export async function titleFromEntity(e: QlooEntity, kind: "movie" | "tv"): Prom
   if (!e.name) return null;
   if (e.entity_id) {
     const byId = await prisma.title.findFirst({ where: { qlooEntityId: e.entity_id } });
-    if (byId) return byId;
+    if (byId && normTitle(byId.name) === normTitle(e.name)) return byId;
+    // linked by an earlier loose match: unlink it and look the title up properly
+    if (byId) await prisma.title.update({ where: { id: byId.id }, data: { qlooEntityId: null, qlooMatchConf: null } });
   }
   const year = e.properties?.release_year ?? (e.properties?.release_date ? Number(e.properties.release_date.slice(0, 4)) : null);
   const found = await findByName(e.name, kind, year);

@@ -5,6 +5,7 @@ import type { ShareCard } from "@tp/shared";
 import { titleHref } from "@/lib/format";
 import { apiSafe } from "@/lib/server";
 import { shareDescription, shareHeadline } from "@/lib/share";
+import { BRAND } from "@/lib/brand";
 
 const load = (id: string) => apiSafe<{ card: ShareCard | null }>(`/v1/share/${id.replace(/[^a-z0-9]/gi, "").slice(0, 20)}`, { card: null });
 
@@ -14,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const title = shareHeadline(card);
   const description = shareDescription(card);
   // the preview image comes from opengraph-image.tsx next to this page
-  return { title, description, openGraph: { title, description, siteName: "Tonight's Pick" }, twitter: { card: "summary_large_image", title, description } };
+  return { title, description, openGraph: { title, description, siteName: BRAND.name }, twitter: { card: "summary_large_image", title, description } };
 }
 
 function Dots({ liked, disliked, size = "text-lg" }: { liked: number | null; disliked: number | null; size?: string }) {
@@ -39,7 +40,7 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <section className="surface space-y-5 rounded-3xl p-6">
-        <p className="font-display text-sm font-bold uppercase tracking-widest text-accent">Tonight&apos;s Pick</p>
+        <p className="font-display text-sm font-bold uppercase tracking-widest text-accent">{BRAND.name}</p>
         <h1 className="font-display text-4xl font-bold uppercase leading-tight">{shareHeadline(card)}</h1>
         {card.kind === "match" ? (
           <>

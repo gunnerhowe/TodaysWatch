@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import type { Title } from "@tp/shared";
 import { api } from "@/lib/server";
+import { BRAND } from "@/lib/brand";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -20,7 +21,7 @@ export default async function OG({ params }: { params: Promise<{ type: string; t
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#0b0a09", color: "#f3ede2", padding: 72, fontFamily: "sans-serif" }}>
-        <div style={{ fontSize: 34, color: "#f2b544", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Tonight&apos;s Pick</div>
+        <div style={{ fontSize: 34, color: "#f2b544", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>{BRAND.name}</div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {scored ? (
             <div style={{ fontSize: 76, fontWeight: 800, lineHeight: 1.05 }}>

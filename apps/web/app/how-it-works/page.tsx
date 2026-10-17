@@ -1,5 +1,6 @@
 import type { Baseline } from "@tp/shared";
 import { apiSafe } from "@/lib/server";
+import { BRAND } from "@/lib/brand";
 
 export const metadata = { title: "How it works" };
 
@@ -15,7 +16,7 @@ export default async function HowItWorks() {
 
       <Section title="The idea">
         <p>
-          Critics and star ratings tell you what reviewers think. Tonight&apos;s Pick reads what ordinary viewers already said online, adjusts for genre, and pairs it with Qloo&apos;s taste graph so the pick is both good and yours.
+          Critics and star ratings tell you what reviewers think. {BRAND.name} reads what ordinary viewers already said online, adjusts for genre, and pairs it with Qloo&apos;s taste graph so the pick is both good and yours.
         </p>
       </Section>
 

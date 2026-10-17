@@ -1,4 +1,5 @@
 import { slugify, type Score, type TitleTypeSlug } from "@tp/shared";
+import { BRAND } from "./brand";
 
 export const titleHref = (t: { type: TitleTypeSlug; tmdbId: number; name: string }) => `/t/${t.type}/${t.tmdbId}/${slugify(t.name) || "title"}`;
 
@@ -10,7 +11,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   BLUESKY: "Bluesky",
   TMDB_REVIEW: "TMDB reviews",
   TRAKT: "Trakt",
-  TONIGHTS_PICK: "Tonight's Pick users",
+  TONIGHTS_PICK: `${BRAND.name} users`,
 };
 
 /** "Reddit 280 · YouTube 254 · other 78": the two biggest sources named, the rest as "other". */

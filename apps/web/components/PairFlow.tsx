@@ -7,6 +7,7 @@ import { OnboardingGrid } from "./OnboardingGrid";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
 import { ShareButton } from "./ShareButton";
+import { BRAND } from "@/lib/brand";
 
 interface PairInfo {
   pair: Pair;
@@ -58,7 +59,7 @@ function TasteMatches({ code, ratingsKey }: { code: string; ratingsKey: string }
                 </p>
                 <p className="text-xs text-dim">{both.length ? `Both like ${both.join(", ")}` : "Not much in common yet"}{m.inCommon >= 3 ? ` · ${m.inCommon} titles rated by both` : ""}</p>
               </div>
-              {m.includesMe && <ShareButton body={{ kind: "match", code, index: i }} text={`We're a ${m.pct}% movie match on Tonight's Pick`} />}
+              {m.includesMe && <ShareButton body={{ kind: "match", code, index: i }} text={`We're a ${m.pct}% movie match on ${BRAND.name}`} />}
             </li>
           );
         })}

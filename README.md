@@ -72,6 +72,16 @@ Exact schemas, dumped from the harness: [docs/qloo-tools.json](docs/qloo-tools.j
 
 Every label records which models produced it and the prompt version (e.g. `…Nano…+review:…Super…@cls-v4`). When the prompt or the enabled sources change, existing scores are marked stale and rescored. The RoBERTa classifier in the repo runs only if you opt in (`CLASSIFIER=roberta` or `ALLOW_ROBERTA_FALLBACK=true`), on a worker thread.
 
+**Reasoning:** Nemotron's reasoning mode is **off** for agent steps and summaries (`chat_template_kwargs: { enable_thinking: false }`; `AGENT_REASONING` turns it back on). We measured answers 2–3× faster with it off (48s → 33s, 91s → 28s on the same requests, same picks). With it on, reasoning used up a summary's whole token budget and left about half of them empty.
+
+### Where Nebius Token Factory sped us up
+
+- **No GPUs to run:** an OpenAI-compatible endpoint, so the standard `openai` SDK pointed at Nebius was all the setup. Swapping models is a config change (`LLM_AGENT_MODEL`, `LLM_CLASSIFIER_MODEL`).
+- **Two model sizes, one API:** Nano labels comments in parallel batches (cheap, high volume); Super handles the agent and the second opinion. Picking the size per job kept a scored title at about 5¢ and an agent answer at about 1¢.
+- **It replaced a local model that didn't fit:** our first fallback classifier ran locally and needed ~750 MB, which got our 1 GB API container killed. Moving all inference to Token Factory removed that.
+- **Model discovery at boot:** `GET /v1/models` checks that the configured model IDs exist, and `/health` reports it.
+- **Metered calls:** every call's tokens and cost go into a usage ledger with daily caps, shown per answer in "How we picked this".
+
 The `pnpm llm:smoke` tool-calling result goes in [docs/eval](docs/eval/README.md).
 
 ## Repository layout

@@ -11,7 +11,7 @@ import { remaining } from "../lib/ledger.ts";
 import { nextBudgetReset, pauseScoring, scoringPause } from "../pipeline/pause.ts";
 import { llmLabelling } from "../pipeline/version.ts";
 import { isActive, lastProgress, onProgress } from "../pipeline/progress.ts";
-import { isProfane, quoteExcerpt } from "../pipeline/score.ts";
+import { isMetaQuote, isProfane, quoteExcerpt } from "../pipeline/score.ts";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
 import { entitiesOf } from "../qloo/types.ts";
@@ -110,7 +110,7 @@ export async function titleRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const rows = await prisma.mention.findMany({ where: { titleId: id, isQuote: true, excerpt: { not: "" } }, orderBy: { confidence: "desc" }, take: 6 });
     return {
-      quotes: rows.filter((m) => !isProfane(m.excerpt)).map((m) => ({ id: m.id, stance: m.stance === "LIKED" ? "LIKED" : "DISLIKED", excerpt: quoteExcerpt(m.excerpt), url: m.url, source: m.source })),
+      quotes: rows.filter((m) => !isProfane(m.excerpt) && !isMetaQuote(m.excerpt)).map((m) => ({ id: m.id, stance: m.stance === "LIKED" ? "LIKED" : "DISLIKED", excerpt: quoteExcerpt(m.excerpt), url: m.url, source: m.source })),
     };
   });
 

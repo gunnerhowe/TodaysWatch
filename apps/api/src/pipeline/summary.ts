@@ -28,6 +28,9 @@ export async function summarize(t: Title, counted: Mention[]): Promise<string | 
     purpose: "summary",
     temperature: 0.2,
     maxTokens: 400,
+    // With reasoning on, the reasoning used up all 400 tokens and the summary came back empty
+    // (130 of 243 scored titles had none).
+    noReasoning: true,
     messages: [
       {
         role: "system",

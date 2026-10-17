@@ -321,7 +321,7 @@ async function chooseQuotes(titleId: string, counted: Mention[]) {
     counted
       // Quotes are what visitors read, so hold them to a higher bar than counting:
       // confident labels only, and never a comment about the YouTube video itself.
-      .filter((m) => m.stance === stance && m.excerpt && m.excerpt.length >= 30 && (m.confidence ?? 0) >= QUOTE_MIN_CONFIDENCE && !mentionsTheVideo(m.excerpt) && !isProfane(m.excerpt))
+      .filter((m) => m.stance === stance && m.excerpt && m.excerpt.length >= 30 && (m.confidence ?? 0) >= QUOTE_MIN_CONFIDENCE && !mentionsTheVideo(m.excerpt) && !isProfane(m.excerpt) && !isMetaQuote(m.excerpt))
       .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || (b.likes ?? 0) - (a.likes ?? 0))
       .slice(0, 3)
       .map((m) => m.id);
@@ -336,6 +336,13 @@ async function chooseQuotes(titleId: string, counted: Mention[]) {
 const PROFANE = /\b(f+u+c+k\w*|sh[i1]t\w*|\w*shit\w*|bitch\w*|cunt\w*|dick(head)?s?|asshole\w*|bastard\w*|motherf\w*|wank\w*|twat\w*|retard\w*|fag\w*|n[i1]gg\w*|slut\w*|whore\w*|pussy|cock(sucker)?s?|piss(ed)?|damn|crap)\b/i;
 export function isProfane(s: string): boolean {
   return PROFANE.test(s);
+}
+
+// About someone else's review, not the commenter's own viewing ("Here's the entire review from
+// the moron on IMDB that Jay read…"): not shown as a quote.
+const META = /\b(imdb|rotten tomatoes|letterboxd|metacritic|review from|the reviewer|critics? (said|says|say)|that (jay|mike|rich) read)\b/i;
+export function isMetaQuote(s: string): boolean {
+  return META.test(s);
 }
 
 export function quoteExcerpt(s: string): string {

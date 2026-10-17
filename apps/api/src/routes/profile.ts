@@ -9,6 +9,7 @@ import { ensureQlooEntity } from "../qloo/match.ts";
 import { descriptiveTags } from "../qloo/types.ts";
 import { ratingChanged } from "../pipeline/score.ts";
 import { chipDto } from "../titles.ts";
+import { eventsWhere } from "../lib/events.ts";
 
 export async function profileRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireCaller);
@@ -70,17 +71,20 @@ export async function profileRoutes(app: FastifyInstance) {
   app.get("/v1/profile/export", async (req) => {
     const profile = await existingProfile(req.caller?.profileToken ?? null);
     if (!profile) return { profile: null };
-    const [ratings, sessions, pairs, shares] = await Promise.all([
+    const [ratings, sessions, pairs, shares, events] = await Promise.all([
       prisma.rating.findMany({ where: { profileId: profile.id }, include: { title: { select: { name: true, year: true, type: true, tmdbId: true } } } }),
       prisma.chatSession.findMany({ where: { profileId: profile.id }, include: { messages: true } }),
       prisma.pair.findMany({ where: { members: { some: { profileId: profile.id } } }, select: { id: true, size: true, createdAt: true, expiresAt: true } }),
       prisma.shareCard.findMany({ where: { profileId: profile.id }, select: { id: true, kind: true, data: true, createdAt: true } }),
+      prisma.event.findMany({ where: eventsWhere(req.caller!.profileToken!, profile.id), select: { type: true, groupId: true, props: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
     ]);
-    return { exportedAt: new Date().toISOString(), profile: { id: profile.id, createdAt: profile.createdAt, settings: profile.settings }, ratings, chats: sessions, pairs, shareLinks: shares };
+    return { exportedAt: new Date().toISOString(), profile: { id: profile.id, createdAt: profile.createdAt, settings: profile.settings }, ratings, chats: sessions, pairs, shareLinks: shares, events };
   });
 
   app.delete("/v1/profile", async (req) => {
     const profile = await existingProfile(req.caller?.profileToken ?? null);
+    // usage events from this device or profile go too, even if there's no profile
+    if (req.caller?.profileToken) await prisma.event.deleteMany({ where: eventsWhere(req.caller.profileToken, profile?.id ?? null) });
     if (profile) await prisma.shareCard.deleteMany({ where: { profileId: profile.id } }); // share links they made go too
     if (profile) await prisma.profile.delete({ where: { id: profile.id } });
     return { deleted: !!profile };

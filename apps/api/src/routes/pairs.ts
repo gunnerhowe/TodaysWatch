@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { CreatePairZ, JoinPairZ, type GroupMatch, type Pair } from "@tp/shared";
-import type { Pair as PairRow, PairMember as MemberRow } from "@prisma/client";
+import { CreatePairZ, JoinPairZ, type FinalAnswer, type GroupMatch, type Pair } from "@tp/shared";
+import type { Pair as PairRow, PairMember as MemberRow, Prisma } from "@prisma/client";
 import { runAgent } from "../agent/loop.ts";
 import { prisma } from "../db.ts";
 import { existingProfile, profileFor, requireCaller } from "../lib/auth.ts";
+import { recordEvent } from "../lib/events.ts";
 import { inviteCode } from "../lib/hash.ts";
 import { cached, matchPeople, MATCH_MIN_LIKES, personTaste } from "../taste.ts";
 import { chatLimiter } from "./limits.ts";
@@ -59,6 +60,10 @@ export async function pairRoutes(app: FastifyInstance) {
       data: { inviteCode: inviteCode(), aId: a.id, size: body.data.size, expiresAt: new Date(Date.now() + PAIR_TTL), members: { create: { profileId: a.id, name: cleanName(body.data.name) } } },
       include: { members: true },
     });
+    // the loop: someone who joined another person's group now starts their own
+    const wasInvitee = await prisma.pairMember.count({ where: { profileId: a.id, pairId: { not: pair.id }, pair: { aId: { not: a.id } } } });
+    await recordEvent("group_created", { profileToken: req.caller.profileToken, profileId: a.id }, { groupId: pair.id, props: { size: pair.size } });
+    if (wasInvitee) await recordEvent("invitee_started_own_group", { profileToken: req.caller.profileToken, profileId: a.id }, { groupId: pair.id });
     return { pair: await pairDto(pair, a.id) };
   });
 
@@ -68,7 +73,10 @@ export async function pairRoutes(app: FastifyInstance) {
     if (!pair || pair.expiresAt < new Date()) return reply.code(404).send({ error: "This invite has expired." });
     const me = await existingProfile(req.caller?.profileToken ?? null);
     const myRatedCount = me ? await prisma.rating.count({ where: { profileId: me.id, value: { not: null } } }) : 0;
-    return { pair: await pairDto(pair, me?.id ?? null), member: !!me && pair.members.some((m) => m.profileId === me.id), myRatedCount };
+    const member = !!me && pair.members.some((m) => m.profileId === me.id);
+    // the group's latest picks, so everyone sees the same result (members only; older clients ignore it)
+    const lastPick = member && pair.lastAnswer && pair.lastPickAt ? { answer: pair.lastAnswer as unknown as FinalAnswer, at: pair.lastPickAt.toISOString() } : null;
+    return { pair: await pairDto(pair, me?.id ?? null), member, myRatedCount, lastPick };
   });
 
   // Joining uses the profile already on this device, so someone with ratings brings their
@@ -83,6 +91,7 @@ export async function pairRoutes(app: FastifyInstance) {
     if (pair.members.some((m) => m.profileId === me.id)) return { pair: await pairDto(pair, me.id) };
     if (pair.members.length >= pair.size) return reply.code(409).send({ error: `This group is full (${pair.size} people).` });
     await prisma.pairMember.create({ data: { pairId: pair.id, profileId: me.id, name: cleanName(body.success ? body.data.name : undefined) } });
+    await recordEvent("invitee_joined", { profileToken: req.caller.profileToken, profileId: me.id }, { groupId: pair.id });
     return { pair: await pairDto((await findByCode(code))!, me.id) };
   });
 
@@ -110,7 +119,22 @@ export async function pairRoutes(app: FastifyInstance) {
       message: (body.message?.slice(0, 300) || `Pick something for all ${n} of us tonight`) + `. We are ${n} people; use pair_pick.`,
       channel: "web",
     });
+    if (out.answer.picks.length) {
+      await prisma.pair.update({ where: { id: pair.id }, data: { lastAnswer: out.answer as unknown as Prisma.InputJsonValue, lastPickAt: new Date() } });
+      await recordEvent("group_picks_shown", { profileToken: req.caller!.profileToken!, profileId: me.id }, { groupId: pair.id, props: { people: n } });
+    }
     return { answer: out.answer };
+  });
+
+  // Set (or change) your own first name in a group after the fact, e.g. on the share step.
+  app.patch("/v1/pairs/:code/me", async (req, reply) => {
+    const { code } = req.params as { code: string };
+    const body = JoinPairZ.safeParse(req.body ?? {});
+    const me = await existingProfile(req.caller?.profileToken ?? null);
+    const pair = await findByCode(code);
+    if (!body.success || !me || !pair || !pair.members.some((m) => m.profileId === me.id)) return reply.code(404).send({ error: "not found" });
+    await prisma.pairMember.update({ where: { pairId_profileId: { pairId: pair.id, profileId: me.id } }, data: { name: cleanName(body.data.name) } });
+    return { pair: await pairDto((await findByCode(code))!, me.id) };
   });
 }
 

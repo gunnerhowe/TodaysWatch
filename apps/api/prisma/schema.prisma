@@ -177,6 +177,9 @@ model Pair {
   members    PairMember[]
   expiresAt  DateTime
   createdAt  DateTime     @default(now())
+  /// the group's latest picks, so everyone in the group sees the same result (Couch Truce)
+  lastAnswer Json?
+  lastPickAt DateTime?
 }
 
 model PairMember {
@@ -325,4 +328,21 @@ model ShareCard {
   expiresAt DateTime
 
   @@index([profileId])
+}
+
+/// First-party product events for measuring the group loop. No third-party trackers.
+/// deviceHash is a salted hash of the guest cookie; profileId is set when a profile exists.
+model Event {
+  id         String   @id @default(cuid())
+  type       String // home_view | group_created | share_clicked | invite_opened | ...
+  deviceHash String
+  profileId  String?
+  groupId    String? // Pair.id
+  props      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([deviceHash])
+  @@index([profileId])
+  @@index([groupId])
 }

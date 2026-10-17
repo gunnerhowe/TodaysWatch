@@ -18,6 +18,7 @@ import { shareRoutes } from "./routes/share.ts";
 import { profileRoutes } from "./routes/profile.ts";
 import { systemRoutes } from "./routes/system.ts";
 import { titleRoutes } from "./routes/titles.ts";
+import { eventRoutes } from "./routes/events.ts";
 
 /** Redact anything secret-shaped from logs. */
 const redact = ["req.headers.authorization", "req.headers['x-api-secret']", "req.headers['x-admin-secret']", "req.headers['x-profile-token']", "req.headers.cookie"];
@@ -42,6 +43,7 @@ export async function buildApp() {
   await app.register(agentRoutes);
   await app.register(pairRoutes);
   await app.register(shareRoutes);
+  await app.register(eventRoutes);
   await registerMcp(app);
   return app;
 }

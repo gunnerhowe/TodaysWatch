@@ -6,6 +6,7 @@ import { postJson, readSse, streamToken } from "@/lib/client";
 import { PickCard } from "./PickCard";
 import { ProvenanceDrawer } from "./ProvenanceDrawer";
 import { ShareButton } from "./ShareButton";
+import { track } from "@/lib/track";
 
 interface Turn {
   id: number;
@@ -65,6 +66,8 @@ export function Chat({ initialQuery, pairId }: { initialQuery?: string; pairId?:
     setTurns((ts) => [...ts, { id, user: msg, steps: [], answer: null, error: null, picks: [], backups: [] }]);
     setInput("");
     setBusy(true);
+    // a new request, not a follow-up in the same chat
+    if (!sessionId.current && !pairId) track("solo_pick_requested");
     try {
       const { token, url } = await streamToken();
       const res = await fetch(`${url}/v1/agent/chat`, {

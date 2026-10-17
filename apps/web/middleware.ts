@@ -35,4 +35,4 @@ export function middleware(req: NextRequest) {
 }
 
 // _vercel/ is Vercel's own analytics endpoint: no guest cookie needed there
-export const config = { matcher: ["/((?!_next/|_vercel/|favicon|icon|.*\\.(?:png|svg|jpg|ico|txt)$).*)"] };
+export const config = { matcher: ["/((?!_next/|_vercel/|favicon|icon|apple-icon|manifest|.*\\.(?:png|svg|jpg|ico|txt)$).*)"] };

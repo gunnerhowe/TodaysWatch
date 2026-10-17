@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { API_BASE, guestToken } from "@/lib/server";
+import { brandSlug } from "@/lib/brand";
 
 /**
  * Normal calls go browser -> this route handler -> API, adding the shared secret and the
@@ -27,7 +28,7 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
   if (!res) return NextResponse.json({ error: "The service is unreachable right now." }, { status: 502 });
   const text = await res.text();
   const headers: Record<string, string> = { "content-type": res.headers.get("content-type") ?? "application/json" };
-  if (path[0] === "profile" && path[1] === "export") headers["content-disposition"] = 'attachment; filename="tonights-pick-export.json"';
+  if (path[0] === "profile" && path[1] === "export") headers["content-disposition"] = `attachment; filename="${brandSlug()}-export.json"`;
   return new NextResponse(text, { status: res.status, headers });
 }
 

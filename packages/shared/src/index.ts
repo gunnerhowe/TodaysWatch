@@ -376,3 +376,29 @@ export function numberToWords(n: number): string {
   }
   return String(n);
 }
+
+/** First-party loop events (Couch Truce). Names are part of the admin metrics; add, don't rename. */
+export const EVENT_TYPES = [
+  "home_view",
+  "group_created",
+  "share_clicked",
+  "invite_opened",
+  "invitee_joined",
+  "invitee_rated",
+  "group_picks_shown",
+  "invitee_started_own_group",
+  "solo_pick_requested",
+  "return_visit",
+] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+/** What the browser may send. Small on purpose: a few short flat props, no free text blobs. */
+export const EventZ = z.object({
+  type: z.enum(EVENT_TYPES),
+  groupCode: z.string().regex(/^[a-z0-9]{1,20}$/i).optional(),
+  props: z
+    .record(z.string().max(32), z.union([z.string().max(80), z.number(), z.boolean()]))
+    .refine((o) => Object.keys(o).length <= 8, "too many props")
+    .optional(),
+});
+export type EventInput = z.infer<typeof EventZ>;

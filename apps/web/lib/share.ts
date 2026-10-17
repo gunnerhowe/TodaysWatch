@@ -1,4 +1,5 @@
 import type { ShareCard } from "@tp/shared";
+import { BRAND } from "./brand";
 
 /** "Sam, Alex & Jo" / "Sam & 2 friends" / "a group of 3" */
 export function peopleLine(people: string[], groupSize: number): string {
@@ -19,8 +20,8 @@ export function shareHeadline(card: ShareCard): string {
 export function shareDescription(card: ShareCard): string {
   if (card.kind === "match") {
     const both = [...card.sharedTags, ...card.sharedGenres].slice(0, 3);
-    return both.length ? `They both like ${both.join(", ")}. Find your own match on Tonight's Pick.` : "Find your own movie match on Tonight's Pick.";
+    return both.length ? `They both like ${both.join(", ")}. Find your own match on ${BRAND.name}.` : `Find your own movie match on ${BRAND.name}.`;
   }
   const top = card.picks[0];
-  return top ? `${top.name}${top.year ? ` (${top.year})` : ""}${top.likedPct !== null ? `: ${top.likedPct}% of viewers liked it` : ""}. Three picks everyone will like, from Tonight's Pick.` : "Three picks everyone will like, from Tonight's Pick.";
+  return top ? `${top.name}${top.year ? ` (${top.year})` : ""}${top.likedPct !== null ? `: ${top.likedPct}% of viewers liked it` : ""}. Three picks everyone will like, from ${BRAND.name}.` : `Three picks everyone will like, from ${BRAND.name}.`;
 }

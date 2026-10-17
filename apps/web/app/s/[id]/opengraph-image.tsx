@@ -2,11 +2,12 @@ import { ImageResponse } from "next/og";
 import type { ShareCard } from "@tp/shared";
 import { apiSafe } from "@/lib/server";
 import { shareHeadline } from "@/lib/share";
+import { BRAND } from "@/lib/brand";
 
 // The picture group chats and social apps show for a share link. Text only: no posters.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Tonight's Pick";
+export const alt = BRAND.name;
 
 const C = { bg: "#0b0a09", card: "#14120f", line: "#2a2621", fg: "#f3ede2", dim: "#b9b0a1", faint: "#8a8174", accent: "#f2b544", liked: "#2bb3a3", disliked: "#ec6a55" };
 
@@ -27,7 +28,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: C.bg, color: C.fg, padding: "56px 64px", fontFamily: "sans-serif" }}>
-        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: C.accent, textTransform: "uppercase" }}>Tonight&apos;s Pick</div>
+        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: C.accent, textTransform: "uppercase" }}>{BRAND.name}</div>
         <div style={{ display: "flex", fontSize: card?.kind === "match" ? 58 : 46, fontWeight: 800, lineHeight: 1.1, marginTop: 14, maxWidth: 1060 }}>{headline}</div>
 
         {card?.kind === "match" && (
@@ -68,7 +69,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         )}
 
         <div style={{ display: "flex", marginTop: "auto", paddingTop: 16, fontSize: 24, color: C.faint }}>
-          {card?.kind === "match" ? "Find your movie match" : "Picks everyone will like, scored by real viewers"} · todays-watch.vercel.app
+          {card?.kind === "match" ? "Find your movie match" : "Picks everyone will like, scored by real viewers"} · {BRAND.host}
         </div>
       </div>
     ),

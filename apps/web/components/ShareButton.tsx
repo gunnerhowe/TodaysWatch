@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { postJson } from "@/lib/client";
+import { BRAND } from "@/lib/brand";
 
 type ShareBody = { kind: "pick"; runId: string; code?: string } | { kind: "match"; code: string; index: number };
 
@@ -14,7 +15,7 @@ export function ShareButton({ body, label = "Share", text }: { body: ShareBody; 
       const { id } = await postJson<{ id: string }>("/share", body);
       const url = `${window.location.origin}/s/${id}`;
       if (navigator.share) {
-        await navigator.share({ title: "Tonight's Pick", text, url }).catch(() => {});
+        await navigator.share({ title: BRAND.name, text, url }).catch(() => {});
         setState("idle");
       } else {
         await navigator.clipboard.writeText(url);

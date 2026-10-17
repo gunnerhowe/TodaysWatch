@@ -29,7 +29,9 @@ export async function shareRoutes(app: FastifyInstance) {
     let card: ShareCard;
     if (body.data.kind === "pick") {
       const run = await prisma.agentRun.findUnique({ where: { id: body.data.runId }, include: { session: { select: { profileId: true } } } });
-      if (!run || run.session.profileId !== me.id) return reply.code(404).send({ error: "not found" });
+      // your own run, or the group's latest picks if you're in that group (anyone in it can share them)
+      const groupRun = !!group && (group.lastAnswer as { runId?: string } | null)?.runId === body.data.runId;
+      if (!run || (run.session.profileId !== me.id && !groupRun)) return reply.code(404).send({ error: "not found" });
       const ids = ((run.picks as { picks?: string[] } | null)?.picks ?? []).slice(0, 3);
       if (!ids.length) return reply.code(409).send({ error: "There are no picks to share yet." });
       const titles = await prisma.title.findMany({ where: { id: { in: ids } } });

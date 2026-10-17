@@ -12,6 +12,8 @@ export interface Candidate {
   sharedTags: string[];
   perPerson?: { who: string; reason: string }[];
   pairWorse?: number;
+  /** group average fit (tie-breaker after pairWorse) */
+  pairBetter?: number;
 }
 
 export interface ToolTrace {

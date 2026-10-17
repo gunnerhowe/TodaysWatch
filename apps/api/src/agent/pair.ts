@@ -132,6 +132,7 @@ export async function groupCandidates(state: TurnState, people: GroupPerson[], t
       origin: "pair_pick",
       sharedTags: shared,
       pairWorse: fit.worse,
+      pairBetter: fit.better,
       perPerson: ranked.map((p, i) => {
         const yours = p.who === "You";
         const example = p.liked[0]?.name;
@@ -156,4 +157,15 @@ export async function groupCandidates(state: TurnState, people: GroupPerson[], t
       worst_fit: Math.round(groupFit(r.fits).worse * 100) / 100,
     })),
   };
+}
+
+/**
+ * The group's final order: best WORST fit first (the least-excited person decides). Within about
+ * 0.05 of each other, titles that already have a score go first, then the better average fit.
+ * Applied after the model answers: it once picked Succession, ranked 10th of 10 for two of three.
+ */
+export function groupOrder(cands: { id: string; worse: number; better: number; scored: boolean }[]): string[] {
+  return [...cands]
+    .sort((a, b) => (Math.abs(a.worse - b.worse) > 0.05 ? b.worse - a.worse : Number(b.scored) - Number(a.scored) || b.better - a.better || b.worse - a.worse))
+    .map((c) => c.id);
 }

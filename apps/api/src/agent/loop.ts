@@ -6,6 +6,7 @@ import { enqueueScore } from "../jobs/index.ts";
 import { CapExceededError } from "../lib/ledger.ts";
 import { agentModel, chat, llmConfigured, type Msg, type ToolCall } from "../llm/index.ts";
 import { buildCards, groundedIntro } from "./cards.ts";
+import { groupOrder } from "./pair.ts";
 import { applyContext, loadUserContext, settingsConstraints, type UserContext } from "./context.ts";
 import { keywordIds } from "../sources/tmdb.ts";
 import { isFollowUp, isVague, parseRequest, refersBack } from "./parse.ts";
@@ -103,6 +104,14 @@ export async function runAgent(input: RunInput): Promise<RunOutput> {
     final = await defaultPlan(input.message, state, ctx, emit, !usedFallback);
   }
 
+  // A group pick is decided by the least-excited person, whatever order the model gave.
+  const groupCands = [...state.candidates.values()].filter((c) => c.pairWorse !== undefined && !state.excluded(c.titleId) && state.available.get(c.titleId) !== false);
+  if (groupCands.length >= 3 && !final.question) {
+    const order = groupOrder(groupCands.map((c) => ({ id: c.titleId, worse: c.pairWorse!, better: c.pairBetter ?? c.pairWorse!, scored: (state.titles.get(c.titleId)?.countedN ?? 0) >= EARLY_MIN })));
+    const given = [...final.picks, ...final.backups];
+    const whyOf = (id: string) => given.find((p) => p.id === id)?.why ?? "";
+    final = { ...final, picks: order.slice(0, 3).map((id) => ({ id, why: whyOf(id) })), backups: order.slice(3, 5).map((id) => ({ id, why: whyOf(id) })) };
+  }
   emit({ type: "tool", tool: "final_answer", label: TOOL_LABELS.final_answer! });
   const [picks, backups] = await Promise.all([buildCards(state, final.picks), buildCards(state, final.backups)]);
   const pending = picks.filter((p) => p.scorePending);

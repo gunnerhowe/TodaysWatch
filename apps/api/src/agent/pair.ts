@@ -3,7 +3,8 @@ import { comparePairFit, groupFit, rankToTaste } from "@tp/scoring";
 import { callQloo } from "../qloo/bridge.ts";
 import { ensureQlooEntity, titleFromEntity } from "../qloo/match.ts";
 import { descriptiveTags, entitiesOf, tidyTagName, type InsightsType, type QlooResult } from "../qloo/types.ts";
-import { WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
+import { discoverForRequest, WELL_KNOWN_VOTES } from "../sources/tmdb.ts";
+import { upsertTitle } from "../titles.ts";
 import type { TurnState } from "./state.ts";
 
 const qType = (k: "MOVIE" | "TV"): InsightsType => (k === "MOVIE" ? "movie" : "tv_show");
@@ -95,6 +96,15 @@ export async function groupCandidates(state: TurnState, people: GroupPerson[], t
       // heard of ("Keeping Faith", "Alaska Daily") is hard to agree on and usually unscored.
       const known = pool.filter((t) => (t.tmdbVoteCount ?? 0) >= WELL_KNOWN_VOTES);
       pools.push(known.length >= 3 ? known : pool);
+    }
+    // A topic ("about Halloween") is a hard filter Qloo's taste matches rarely meet, so the group
+    // ranks titles from TMDB's topic search instead (each person still ranks them on Qloo).
+    const f = state.constraints;
+    if (f.topics?.length) {
+      const k = kind === "MOVIE" ? "movie" : "tv";
+      const found = await discoverForRequest(k, { vibes: state.vibes, maxRuntime: f.maxRuntime, services: f.rentalsOk ? undefined : f.services, originalLanguage: f.originalLanguage, keywordIds: f.topics.flatMap((x) => x.ids), maxRating: f.maxRating }).catch(() => []);
+      const topical = (await Promise.all(found.slice(0, 12).map((d) => upsertTitle(k, d.tmdbId).catch(() => null)))).filter((t): t is Title => !!t && !state.excluded(t.id));
+      pools.splice(0, pools.length, topical);
     }
     // qloo_rank takes at most 10 options: 4 from everyone together, then take turns per person.
     const shortlist: Title[] = [];

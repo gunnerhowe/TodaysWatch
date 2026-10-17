@@ -354,7 +354,11 @@ export async function defaultPlan(message: string, state: TurnState, ctx: UserCo
       const first = (r.tags as { id: string }[] | undefined)?.[0];
       if (first) exclude.push(first.id);
     }
-    const two = (p.forTwo && ctx.groupMembers.length > 0) || !!state.pairId;
+    // A group pick on the group's page, or when the request clearly means the group. A plain
+    // "what should we watch?" stays a normal pick: it had turned into a pick for a group made
+    // earlier in the week (and then found nothing "about Halloween").
+    const meansGroup = /\b(both of us|all of us|(two|three|four|five) of us|for two|together|the group|my (partner|wife|husband|girlfriend|boyfriend|friends?))\b/i.test(message);
+    const two = !!state.pairId || (p.forTwo && ctx.groupMembers.length > 0 && meansGroup);
     if (two) await call("pair_pick", { type: p.constraints.type ?? "any" });
     else {
       const r = await call("recommend_titles", { seeds: p.likeTitles, tags, exclude_tags: exclude, type: p.constraints.type ?? "any" });

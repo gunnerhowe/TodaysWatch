@@ -41,6 +41,10 @@ const EnvZ = z.object({
   // Nemotron's reasoning mode for the agent's steps. Off: measured 2-3x faster answers (33s vs
   // 48s, 28s vs 91s) with the same picks, since the server enforces filters and writes reasons.
   AGENT_REASONING: bool(false),
+  // Speculative scoring nobody asked for: the nightly pre-scoring run and the titles queued behind
+  // "More like this". Off while credits are limited (judging period); people's own lookups and
+  // picks still score titles live. The nightly job itself still runs (YouTube text purge, baselines).
+  BACKGROUND_SCORING: bool(false),
   CLASSIFIER_REVIEW_MODEL: opt, // defaults to LLM_AGENT_MODEL; "none" disables the second opinion
   // RoBERTa needs ~750 MB; on a 1 GB host it gets the API killed, so it only runs when asked for
   ALLOW_ROBERTA_FALLBACK: bool(false),

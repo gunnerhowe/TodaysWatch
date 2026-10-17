@@ -90,7 +90,8 @@ export async function nightly(log: (m: string) => void) {
   const cache = await purgeExpiredCache();
   const b = await recomputeBaselines();
   log(`nightly: purged ${purged.count} expired excerpts, ${cache} cache rows; baselines ${b.genres} genres / ${b.titles} titles`);
-  await boss?.send(Q.prescore, {}, { singletonKey: "prescore", retryLimit: 0 });
+  if (env.BACKGROUND_SCORING) await boss?.send(Q.prescore, {}, { singletonKey: "prescore", retryLimit: 0 });
+  else log("nightly: pre-scoring skipped (BACKGROUND_SCORING is off)");
 }
 
 /** Queue and worker state for /health (no secrets: counts, timestamps, title ids, error text). */

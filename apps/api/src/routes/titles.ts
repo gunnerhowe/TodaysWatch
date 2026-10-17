@@ -2,6 +2,7 @@ import type { Title } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { SettingsZ } from "@tp/shared";
+import { env } from "../config.ts";
 import { violates } from "../agent/tools.ts";
 import { trendingTitles } from "../agent/trending.ts";
 import { prisma } from "../db.ts";
@@ -147,7 +148,8 @@ export async function titleRoutes(app: FastifyInstance) {
       if (filtered && (await violates(x, filters))) continue;
       out.push(x);
     }
-    for (const x of out) if (x.scoreState === "NONE") void enqueueScore(x.id, false);
+    // speculative scoring of related titles only when background scoring is on (it spends credits)
+    if (env.BACKGROUND_SCORING) for (const x of out) if (x.scoreState === "NONE") void enqueueScore(x.id, false);
     return { titles: out.map(chipDto), status: r.status };
   });
 

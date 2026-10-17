@@ -31,6 +31,7 @@ export async function systemRoutes(app: FastifyInstance) {
       qloo: { ready: q.ok, detail: q.detail, baseUrl: q.baseUrl, probe: q.probe },
       nebius,
       youtubeUnitsLeft,
+      backgroundScoring: env.BACKGROUND_SCORING, // nightly pre-scoring + related-title queueing
       sources: sourcesEnabled(),
       jobs: await jobStatus().catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
       scoringPaused: scoringPause(),

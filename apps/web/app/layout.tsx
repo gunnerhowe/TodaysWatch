@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Inter } from "next/font/google";
 import Link from "next/link";
@@ -54,6 +55,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </main>
           <Footer />
         </DemoProvider>
+        {/* Vercel Web Analytics: visitor and page-view counts, no cookies */}
+        <Analytics />
       </body>
     </html>
   );

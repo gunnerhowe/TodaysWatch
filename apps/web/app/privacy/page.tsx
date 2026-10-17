@@ -11,6 +11,9 @@ export default function Privacy() {
       <p>
         Opinions we score are public comments collected through official APIs. We keep excerpts of at most 280 characters with a link to the source, never the author&apos;s handle (only a one-way hash, so we can count one opinion per person). YouTube comment text is deleted within 30 days; the derived counts stay.
       </p>
+      <p>
+        Visitor counts: we use Vercel Web Analytics to count page views and visitors. It sets no cookies and doesn&apos;t identify you; it sees the page, referrer, country and device type.
+      </p>
       <p>Voice: linking Alexa+ uses a one-time 6-digit code. No names, emails or account IDs pass through.</p>
       <p>
         Groups and share links: in a Pick together group, the other people see the first name you give (optional) and how many titles you&apos;ve rated and, once you have 3 likes, your taste match with them and the genres and tags you share; never which titles you rated. A share link shows only the picks or the match percentage, with first names people chose to give (otherwise &quot;a friend&quot;). Share links expire after 180 days and are deleted with your profile.

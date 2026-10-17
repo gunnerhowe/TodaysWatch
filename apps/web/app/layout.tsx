@@ -34,18 +34,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             Skip to content
           </a>
           <header className="sticky top-0 z-30 border-b border-line bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur">
-            <nav className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4" aria-label="Main">
-              <Link href="/" className="font-display text-xl font-bold uppercase tracking-wide text-accent">
+            <nav className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4" aria-label="Main">
+              <Link href="/" className="font-display whitespace-nowrap text-xl font-bold uppercase tracking-wide text-accent">
                 {BRAND.name}
               </Link>
-              <div className="ml-auto flex items-center gap-1 text-sm">
-                <Link href="/pair" className="rounded-full px-3 py-1.5 hover:bg-[var(--bg-3)]">
+              <div className="ml-auto flex items-center gap-0.5 whitespace-nowrap text-sm">
+                <Link href="/pair" className="rounded-full px-2.5 py-1.5 hover:bg-[var(--bg-3)]">
                   Together
                 </Link>
-                <Link href="/pick" className="rounded-full px-3 py-1.5 hover:bg-[var(--bg-3)]">
+                <Link href="/pick" className="rounded-full px-2.5 py-1.5 hover:bg-[var(--bg-3)]">
                   Just me
                 </Link>
-                <Link href="/me" className="rounded-full px-3 py-1.5 hover:bg-[var(--bg-3)]">
+                <Link href="/me" className="rounded-full px-2.5 py-1.5 hover:bg-[var(--bg-3)]">
                   Profile
                 </Link>
                 <Link href="/alexa" className="hidden rounded-full px-3 py-1.5 hover:bg-[var(--bg-3)] sm:inline">

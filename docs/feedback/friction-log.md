@@ -2,7 +2,24 @@
 
 Anything confusing about Amazon's, Nebius's or Qloo's tools, written as it happens, with the date. Optional for the Amazon entry (worth up to 10%), and useful for every write-up.
 
-Format: **date · tool · what we tried · what happened · what would have helped**.
+Format: **date · tool · what we tried · what happened · what would have helped**. The structured summary below uses the Amazon entry's format; the dated entries after it are the raw log.
+
+## Structured summary
+
+Severity: **High** = blocked work, **Medium** = cost hours or needed a workaround, **Low** = annoyance.
+
+| # | Tool | Task attempted | Steps taken | Expected | Actual | Severity | Workaround | Suggestion |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **Alexa+** | Test our self-hosted MCP server with real Alexa+ | Looked for a device-free way to point Alexa+ at a custom MCP endpoint | A simulator or test console for Alexa+ that can call a self-hosted MCP server | No device available and no simulator path we could find for MCP integrations | **High** | Built a simulated Alexa+ page (`/alexa`) that calls the same `/mcp` endpoint, and verified the server with MCP Inspector | A browser-based Alexa+ simulator (or developer console) that connects to a self-hosted MCP server |
+| 2 | **MCP TypeScript SDK 1.32.1** | Serve Streamable HTTP from Fastify | Handed Fastify's raw request/response to `StreamableHTTPServerTransport` | Works like the Express examples | Responses were written twice until we called `reply.hijack()`; hijacking then dropped the CORS headers set by `@fastify/cors` | **Medium** | `reply.hijack()` first, then copy CORS headers onto the raw response | Document non-Express servers (Fastify, Hono) in the SDK README |
+| 3 | **MCP TypeScript SDK (browser client)** | Call `/mcp` from our web page | Connected with `StreamableHTTPClientTransport` from the browser | Session continues across calls | Every call started a new session: the browser couldn't read `mcp-session-id` | **Medium** | Added `mcp-session-id` to `Access-Control-Expose-Headers` | Note the CORS headers a browser client needs |
+| 4 | **MCP Inspector 2.11.0** | Verify our server end to end | `--transport http --header "Authorization: Bearer …" --method tools/list` and `tools/call` | Lists 5 tools and returns results | Worked first time | **Low** | None needed | (Worked well) |
+| 5 | **Voice design (Alexa+ answers)** | Read picks aloud with a reason | Spoke each pick's shared taste tags ("Think comics.") | Natural reasons | Raw tag labels sounded broken ("Think scouting and nfl.") | **Low** | Spoken picks give title, year and score only; reasons stay on screen | Guidance for voice-safe phrasing of structured data in MCP tool results |
+| 6 | **Nebius Token Factory (Nemotron 3 Super)** | Generate 2–3 sentence summaries | `max_tokens: 400`, reasoning on (default) | A summary every time | About half came back **empty**: reasoning used the whole token budget, silently | **High** | Turned reasoning off for summaries (`chat_template_kwargs.enable_thinking: false`); backfilled 129 summaries | Return reasoning tokens separately in `usage`, and warn when output is empty because reasoning hit `max_tokens` |
+| 7 | **Nebius Token Factory** | Find exact model IDs | Guessed `nvidia/nemotron-3-super` from the model page | Model page shows the API ID | Calls failed; real IDs are `nvidia/nemotron-3-super-120b-a12b` and `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | **Medium** | `GET /v1/models` at boot; `/health` shows whether configured IDs exist | Show the exact API ID next to each model's marketing name |
+| 8 | **Qloo harness 0.1.26** | Use the hackathon key | Set `QLOO_BASE_URL=https://hackathon.api.qloo.com` | Harness connects | `qloo mcp` exited at start; over MCP only "Connection closed" | **High** | Also set `QLOO_TRUSTED_BASE_URL` to the same URL (found by running `qloo mcp` by hand) | Put both settings in the access email; report the trust error through MCP |
+| 9 | **YouTube Data API v3** | Keep live lookups working all day | Counted quota on UTC days | Our count matches Google's | Google resets at midnight **Pacific**; our count reset at 7 pm Central, so lookups failed for hours | **Medium** | Ledger keyed to the Pacific day; nightly job at 12:15 am Pacific | State the reset time zone next to the quota number in the console |
+
 
 ## 2026-10-14
 
